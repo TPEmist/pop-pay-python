@@ -26,7 +26,75 @@ pip install aegis-pay[langchain]
 pip install aegis-pay[all]
 ```
 
-## 3. Core Components
+## 3. Quick Start for OpenHands / Claude Code Users
+
+If you're using OpenHands, Claude Code, or any MCP-compatible agentic framework, you can get Aegis running in under 2 minutes:
+
+### Step 1: Install & Start MCP Server
+
+```bash
+# Clone the repo
+git clone https://github.com/TPEmist/Project-Aegis.git
+cd Project-Aegis
+
+# Install dependencies
+uv sync --all-extras
+
+# Start the MCP server
+uv run python -m aegis.mcp_server
+```
+
+### Step 2: Connect to Your Agent
+
+**Claude Code:**
+```bash
+claude mcp add aegis -- uv run python -m aegis.mcp_server
+```
+
+**OpenHands:** Add to your MCP configuration:
+```json
+{
+  "mcpServers": {
+    "aegis": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "aegis.mcp_server"],
+      "cwd": "/path/to/Project-Aegis"
+    }
+  }
+}
+```
+
+### Step 3: Configure Your Policy (Environment Variables)
+
+```bash
+export AEGIS_ALLOWED_CATEGORIES='["aws", "cloudflare", "openai", "github"]'
+export AEGIS_MAX_PER_TX=100.0        # Max $100 per single transaction
+export AEGIS_MAX_DAILY=500.0         # Max $500 per day total
+export AEGIS_BLOCK_LOOPS=true        # Block hallucination/retry loops
+# Optional: export AEGIS_STRIPE_KEY=sk_live_... (see §8 for Stripe setup)
+```
+
+### Step 4: Use It
+
+Your agent now has access to the `request_virtual_card` tool. When it encounters a paywall:
+
+```
+Agent: "I need to purchase an API key from AWS for $15 to continue."
+[Tool Call] request_virtual_card(amount=15.0, vendor="AWS", reasoning="Need API key for deployment")
+[Aegis] ✅ Payment approved. Card Issued: ****4242, Expiry: 12/25, Amount: 15.0
+Agent: "Purchase successful, continuing workflow."
+```
+
+If the agent hallucinates or tries to overspend:
+```
+Agent: "Let me retry buying compute... the previous attempt failed again."
+[Tool Call] request_virtual_card(amount=50.0, vendor="AWS", reasoning="failed again, retry loop")
+[Aegis] ❌ Payment rejected. Reason: Hallucination or infinite loop detected in reasoning
+```
+
+---
+
+## 4. Core Components
 
 ### 🛡️ The Vault
 A local visualization console powered by **Streamlit** and **SQLite** (`aegis_state.db`). The Vault allows humans to:
@@ -44,40 +112,41 @@ Aegis provides two modes of intent evaluation to prevent agents from wasting fun
 1. **Fast Keyword-based Interception** (Default): Uses the `GuardrailEngine` to immediately block requests containing keywords associated with loops or hallucinations (e.g., "retry", "failed again", "ignore previous"). Zero dependencies, zero cost.
 2. **LLM-based Guardrail Engine**: Powered by the `LLMGuardrailEngine`, this mode performs deep semantic analysis of the agent's reasoning to detect unrelated purchases or logical inconsistencies. Supports **any OpenAI-compatible endpoint** — including local models via Ollama/vLLM, or cloud providers like OpenAI and OpenRouter.
 
-## 4. Security Statement
+## 5. Security Statement
 Security is a first-class citizen in Aegis. The SDK **masks card numbers by default** (e.g., `****-****-****-4242`) when returning authorization results to the agent. This prevents sensitive payment information from leaking into agent chat logs, model context windows, or persistent logs, ensuring that only the execution environment handles the raw credentials.
 
-## 5. Integration with Claude Code & OpenHands
-Aegis fully supports the **Model Context Protocol (MCP)**. You can integrate our guardrails and card issuance mechanism into your agentic workflow with a single command.
+## 6. The Vault Dashboard
 
-**Start MCP Server:**
+The Vault is your real-time monitoring console for all agent payment activity. 
+
+### Starting the Dashboard
+
 ```bash
-# Claude Code
-claude mcp add aegis -- uv run python -m aegis.mcp_server
-
-# Or run directly
-uv run python -m aegis.mcp_server
+cd Project-Aegis
+uv run streamlit run dashboard/app.py
+# Dashboard opens at http://localhost:8501
 ```
 
-**Configure via environment variables:**
-```bash
-export AEGIS_ALLOWED_CATEGORIES='["aws", "cloudflare", "openai"]'
-export AEGIS_MAX_PER_TX=100.0
-export AEGIS_MAX_DAILY=500.0
-export AEGIS_BLOCK_LOOPS=true
-# Optional: set AEGIS_STRIPE_KEY to use real Stripe Issuing
-```
+### Dashboard Layout
 
-**Automated Purchase Example:**
-```
-Claude: "I found the required dependency, but the repository requires a one-time API key purchase of $15."
-User: "Please proceed if necessary, you have Aegis permissions."
-[Tool Call] request_virtual_card(amount=15.0, vendor="AWS", reasoning="Need API key for dependency installation")
-[Aegis Vault] Request approved. Card Issued: ****4242, Expiry: 12/25...
-Claude: "I successfully bypassed the paywall and the installation is complete."
-```
+| Section | Description |
+|---|---|
+| **Sidebar: Max Daily Budget slider** | Adjust the displayed budget cap for visualization (does not affect backend policy — backend policy is configured via env vars or SDK) |
+| **Today's Spending** | Total amount spent by agents today |
+| **Remaining Budget** | How much budget is left for the day |
+| **Budget Utilization** | Visual progress bar showing spend % |
+| **💳 Issued Seals & Activity** | Full table of all payment attempts (approved + rejected) with seal ID, amount, vendor, status, and timestamp |
+| **🚫 Rejected Summary** | Filtered view showing only rejected/blocked attempts for quick auditing |
 
-## 6. Python SDK Quickstart
+### Tips
+- Click **Refresh Data** in the sidebar to pull latest activity from the database.
+- The dashboard reads from `aegis_state.db` — the same database the SDK writes to. Keep both running simultaneously for live monitoring.
+- Each row in the table corresponds to a single `request_virtual_card` call from an agent.
+
+---
+
+## 7. Python SDK Quickstart
+
 Integrate Aegis into your custom Python or LangChain workflows in just a few lines:
 
 ```python
@@ -128,3 +197,58 @@ tool = AegisPaymentTool(client=client, agent_id="agent-01")
 | vLLM / LM Studio | `http://localhost:8000/v1` | Your model name |
 | OpenRouter | `https://openrouter.ai/api/v1` | `anthropic/claude-3-haiku` |
 | Any OpenAI-compatible | Your endpoint URL | Your model name |
+
+---
+
+## 8. Payment Providers: Stripe vs Mock
+
+### Without Stripe (Default — Mock Provider)
+
+By default, Aegis uses the `MockStripeProvider` which simulates virtual card issuance. This is perfect for:
+- **Development and testing** — no real money involved
+- **Demo and evaluation** — see the full flow without any API keys
+- **Hackathons** — get a working prototype in minutes
+
+Mock cards are fully functional within the Aegis system (budget tracking, burn-after-use, guardrails all work), but they are not real payment instruments.
+
+```python
+from aegis.providers.stripe_mock import MockStripeProvider
+
+client = AegisClient(
+    provider=MockStripeProvider(),  # No API key needed
+    policy=policy
+)
+```
+
+### With Real Stripe Issuing
+
+To issue **real virtual credit cards** through [Stripe Issuing](https://stripe.com/issuing):
+
+**Prerequisites:**
+1. A Stripe account with [Issuing](https://stripe.com/issuing) enabled (requires application approval)
+2. Your Stripe secret key (`sk_live_...` or `sk_test_...`)
+
+**Option A: Via Environment Variable (for MCP Server)**
+```bash
+export AEGIS_STRIPE_KEY=sk_live_your_stripe_key_here
+uv run python -m aegis.mcp_server
+# The MCP server will automatically use StripeIssuingProvider
+```
+
+**Option B: Via Python SDK**
+```python
+from aegis.providers.stripe_real import StripeIssuingProvider
+
+client = AegisClient(
+    provider=StripeIssuingProvider(api_key="sk_live_your_stripe_key_here"),
+    policy=policy
+)
+```
+
+**What Stripe Issuing does:**
+- Creates a real Stripe Cardholder (`Aegis Agent`)
+- Issues a virtual card with a spending limit matching the approved amount
+- Returns masked card details (last 4 digits only) to the agent
+- All Stripe errors are caught and returned as rejection reasons
+
+> **Note:** Stripe Issuing is a premium Stripe product that requires approval. For most development and demo use cases, the Mock provider is sufficient.
