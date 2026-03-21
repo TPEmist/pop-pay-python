@@ -1,3 +1,5 @@
+[English](./README.md) | [繁體中文](./README.zh-TW.md)
+
 # Project Aegis (AgentPay)
 
 Project Aegis is a payment guardrail and one-time flow protocol specifically designed for Agentic AI (e.g., Claude Code, OpenHands). It enables agents to handle financial transactions safely without risking unlimited exposure of human-controlled credit cards.
