@@ -2,7 +2,7 @@
 
 # Project Aegis (AgentPay)
 
-Project Aegis 是專為 Agentic AI（如 Claude Code、OpenHands）設計的**支付護欄與一次性交易協議**。它能讓 AI Agent 安全地處理金融交易，同時避免人類信用卡被無限制地暴露於風險之中。
+Project Aegis 是專為 Agentic AI（如 OpenClaw、NemoClaw、Claude Code、OpenHands）設計的**支付護欄與一次性交易協議**。它能讓 AI Agent 安全地處理金融交易，同時避免人類信用卡被無限制地暴露於風險之中。
 
 ## 1. 問題背景
 當 Agentic AI 在自動化工作流程中遭遇付費牆（如網域註冊、API 額度、運算資源擴展）時，通常被迫停下來等待人類介入。然而，直接將實體信用卡提供給 Agent 會引發「信任危機」：幻覺（hallucination）或無限迴圈可能導致信用卡被刷爆。
@@ -26,9 +26,9 @@ pip install aegis-pay[langchain]
 pip install aegis-pay[all]
 ```
 
-## 3. 快速上手 — OpenHands / Claude Code 使用者
+## 3. 快速上手 — OpenClaw / NemoClaw / Claude Code / OpenHands
 
-如果你使用 OpenHands、Claude Code 或任何支援 MCP 的 Agentic 框架，你可以在 2 分鐘內啟動 Aegis：
+如果你使用 OpenClaw、NemoClaw、Claude Code、OpenHands 或任何支援 MCP 的 Agentic 框架，你可以在 2 分鐘內啟動 Aegis：
 
 ### 步驟一：安裝並啟動 MCP Server
 
@@ -45,6 +45,42 @@ uv run python -m aegis.mcp_server
 ```
 
 ### 步驟二：連接你的 Agent
+
+**OpenClaw：**
+```bash
+# 在 OpenClaw 中註冊 Aegis 為 MCP 工具
+openclaw mcp add aegis -- uv run python -m aegis.mcp_server
+
+# 或手動加入 OpenClaw MCP 設定檔（~/.openclaw/mcp_servers.json）
+```
+```json
+{
+  "aegis": {
+    "command": "uv",
+    "args": ["run", "python", "-m", "aegis.mcp_server"],
+    "cwd": "/path/to/Project-Aegis",
+    "env": {
+      "AEGIS_ALLOWED_CATEGORIES": "[\"aws\", \"cloudflare\", \"openai\"]",
+      "AEGIS_MAX_PER_TX": "100.0",
+      "AEGIS_MAX_DAILY": "500.0"
+    }
+  }
+}
+```
+
+**NemoClaw（NVIDIA 安全沙箱）：**
+
+NemoClaw 將 OpenClaw agent 包裝在安全沙箱中。在你的 NemoClaw 沙箱內設定 Aegis：
+
+```bash
+# 連接到你的 NemoClaw 沙箱
+nemoclaw my-assistant connect
+
+# 在沙箱內註冊 Aegis MCP server
+openclaw mcp add aegis -- uv run python -m aegis.mcp_server
+```
+
+> **注意：** NemoClaw 限制檔案存取權限。請確保 Project-Aegis 複製到 `/sandbox/` 內，以便 agent 能存取。`aegis_state.db` 會建立在沙箱的可寫入目錄中。
 
 **Claude Code：**
 ```bash

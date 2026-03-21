@@ -2,7 +2,7 @@
 
 # Project Aegis (AgentPay)
 
-Project Aegis is a payment guardrail and one-time flow protocol specifically designed for Agentic AI (e.g., Claude Code, OpenHands). It enables agents to handle financial transactions safely without risking unlimited exposure of human-controlled credit cards.
+Project Aegis is a payment guardrail and one-time flow protocol specifically designed for Agentic AI (e.g., OpenClaw, NemoClaw, Claude Code, OpenHands). It enables agents to handle financial transactions safely without risking unlimited exposure of human-controlled credit cards.
 
 ## 1. The Problem
 When Agentic AI encounters a paywall (e.g., domain registration, API credits, compute scaling) during an automated workflow, it is often forced to stop and wait for human intervention. However, providing a physical credit card directly to an agent introduces a "trust crisis": hallucinations or infinite loops could lead to the card being drained.
@@ -26,9 +26,9 @@ pip install aegis-pay[langchain]
 pip install aegis-pay[all]
 ```
 
-## 3. Quick Start for OpenHands / Claude Code Users
+## 3. Quick Start for OpenClaw / NemoClaw / Claude Code / OpenHands
 
-If you're using OpenHands, Claude Code, or any MCP-compatible agentic framework, you can get Aegis running in under 2 minutes:
+If you're using OpenClaw, NemoClaw, Claude Code, OpenHands, or any MCP-compatible agentic framework, you can get Aegis running in under 2 minutes:
 
 ### Step 1: Install & Start MCP Server
 
@@ -45,6 +45,42 @@ uv run python -m aegis.mcp_server
 ```
 
 ### Step 2: Connect to Your Agent
+
+**OpenClaw:**
+```bash
+# Register Aegis as an MCP tool in OpenClaw
+openclaw mcp add aegis -- uv run python -m aegis.mcp_server
+
+# Or add to your OpenClaw MCP config file (~/.openclaw/mcp_servers.json)
+```
+```json
+{
+  "aegis": {
+    "command": "uv",
+    "args": ["run", "python", "-m", "aegis.mcp_server"],
+    "cwd": "/path/to/Project-Aegis",
+    "env": {
+      "AEGIS_ALLOWED_CATEGORIES": "[\"aws\", \"cloudflare\", \"openai\"]",
+      "AEGIS_MAX_PER_TX": "100.0",
+      "AEGIS_MAX_DAILY": "500.0"
+    }
+  }
+}
+```
+
+**NemoClaw (NVIDIA sandbox):**
+
+NemoClaw wraps OpenClaw agents in a secure sandbox. Configure Aegis inside your NemoClaw sandbox by editing the MCP config within the sandbox environment:
+
+```bash
+# Connect to your NemoClaw sandbox
+nemoclaw my-assistant connect
+
+# Inside the sandbox, register the Aegis MCP server
+openclaw mcp add aegis -- uv run python -m aegis.mcp_server
+```
+
+> **Note:** NemoClaw restricts file access. Make sure Project-Aegis is cloned inside `/sandbox/` so the agent can access it. The `aegis_state.db` will be created in the sandbox's writable directory.
 
 **Claude Code:**
 ```bash
