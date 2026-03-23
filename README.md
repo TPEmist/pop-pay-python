@@ -1,4 +1,4 @@
-[English](./README.md) | [繁體中文](./README.zh-TW.md)
+[English](./README.md) | [Chinese](./README.zh-TW.md)
 
 # Project Aegis (AgentPay)
 
@@ -7,7 +7,64 @@ Project Aegis is a payment guardrail and one-time flow protocol specifically des
 ## 1. The Problem
 When Agentic AI encounters a paywall (e.g., domain registration, API credits, compute scaling) during an automated workflow, it is often forced to stop and wait for human intervention. However, providing a physical credit card directly to an agent introduces a "trust crisis": hallucinations or infinite loops could lead to the card being drained.
 
-## 2. Installation
+## 2. Ecosystem Position: Aegis + Browser Agents = Unstoppable
+
+Modern agentic workflows require two complementary capabilities. Aegis does one, and does it exceptionally well.
+
+### 🎯 What Aegis Is — and Isn't
+
+**Aegis is the agent's financial brain and safe vault.** It is responsible for:
+- ✅ Evaluating whether a purchase *should* happen (semantic guardrails)
+- ✅ Enforcing hard budget limits (daily cap, per-transaction cap)
+- ✅ Issuing one-time virtual cards so real credentials are never exposed
+- ✅ Maintaining a full audit trail of every payment attempt
+
+**Aegis does NOT:**
+- ❌ Navigate websites or interact with DOM elements
+- ❌ Solve CAPTCHAs or bypass bot-detection systems
+- ❌ Fill out forms or click "Submit" on behalf of the agent
+
+That's the browser agent's job.
+
+### 🤝 The Handshake: How Aegis and Browser Agents Work Together
+
+The real power emerges when Aegis is paired with a browser automation agent (e.g., OpenHands, browser-use, Skyvern). The workflow is a clean division of labor:
+
+```
+1. [Browser Agent]  Navigates to a site, scrapes product info, reaches checkout.
+        │
+        │  (Hit a paywall / payment form)
+        ▼
+2. [Browser Agent → Aegis MCP]  Calls request_virtual_card(amount, vendor, reasoning)
+        │
+        │  (Aegis evaluates: budget OK? vendor approved? no hallucination?)
+        ▼
+3. [Aegis]  Issues a one-time virtual card (Stripe mode) or mock card (dev mode)
+            Returns masked card number to agent. Full card injected only via
+            trusted local execution environment — never into the LLM's context.
+        │
+        ▼
+4. [Browser Agent]  Uses the approved credentials to complete the checkout form.
+        │
+        ▼
+5. [The Vault]  Dashboard logs the transaction. Card is immediately burned.
+```
+
+### 🌐 Supported Browser Agent Integrations
+
+| Browser Agent | Integration Method | Guide |
+|---|---|---|
+| **OpenHands** | MCP Tool Call | [Quick Start §4](#4-quick-start-for-openclaw--nemoclaw--claude-code--openhands) |
+| **OpenClaw + browser-use** | MCP Tool Call | [Quick Start §4](#4-quick-start-for-openclaw--nemoclaw--claude-code--openhands) |
+| **NemoClaw (sandboxed)** | MCP Tool Call inside sandbox | [Quick Start §4](#4-quick-start-for-openclaw--nemoclaw--claude-code--openhands) |
+| **Custom Playwright / Selenium** | Python SDK `AegisClient` | [Integration Guide](./docs/INTEGRATION_GUIDE.md) |
+| **Skyvern / browser-use** | Python SDK middleware | [Integration Guide](./docs/INTEGRATION_GUIDE.md) |
+
+> See **[docs/INTEGRATION_GUIDE.md](./docs/INTEGRATION_GUIDE.md)** for end-to-end code examples including Playwright injection and System Prompt templates.
+
+---
+
+## 3. Installation
 
 ```bash
 # Core only (keyword guardrail + mock provider, zero external dependencies)
@@ -26,7 +83,7 @@ pip install aegis-pay[langchain]
 pip install aegis-pay[all]
 ```
 
-## 3. Quick Start for OpenClaw / NemoClaw / Claude Code / OpenHands
+## 4. Quick Start for OpenClaw / NemoClaw / Claude Code / OpenHands
 
 If you're using OpenClaw, NemoClaw, Claude Code, OpenHands, or any MCP-compatible agentic framework, you can get Aegis running in under 2 minutes:
 
@@ -108,7 +165,6 @@ export AEGIS_MAX_PER_TX=100.0        # Max $100 per single transaction
 export AEGIS_MAX_DAILY=500.0         # Max $500 per day total
 export AEGIS_BLOCK_LOOPS=true        # Block hallucination/retry loops
 # Optional: export AEGIS_STRIPE_KEY=sk_live_... (see §8 for Stripe setup)
-# Optional: export AEGIS_UNMASK_CARDS=true      # Reveal full PAN/CVV to agent (for testing)
 ```
 
 ### Step 4: Use It
@@ -131,7 +187,7 @@ Agent: "Let me retry buying compute... the previous attempt failed again."
 
 ---
 
-## 4. Core Components
+## 5. Core Components
 
 ### 🛡️ The Vault
 A local visualization console powered by **Streamlit** and **SQLite** (`aegis_state.db`). The Vault allows humans to:
@@ -149,10 +205,10 @@ Aegis provides two modes of intent evaluation to prevent agents from wasting fun
 1. **Fast Keyword-based Interception** (Default): Uses the `GuardrailEngine` to immediately block requests containing keywords associated with loops or hallucinations (e.g., "retry", "failed again", "ignore previous"). Zero dependencies, zero cost.
 2. **LLM-based Guardrail Engine**: Powered by the `LLMGuardrailEngine`, this mode performs deep semantic analysis of the agent's reasoning to detect unrelated purchases or logical inconsistencies. Supports **any OpenAI-compatible endpoint** — including local models via Ollama/vLLM, or cloud providers like OpenAI and OpenRouter.
 
-## 5. Security Statement
+## 6. Security Statement
 Security is a first-class citizen in Aegis. The SDK **masks card numbers by default** (e.g., `****-****-****-4242`) when returning authorization results to the agent. This prevents sensitive payment information from leaking into agent chat logs, model context windows, or persistent logs, ensuring that only the execution environment handles the raw credentials.
 
-## 6. The Vault Dashboard
+## 7. The Vault Dashboard
 
 The Vault is your real-time monitoring console for all agent payment activity. 
 
@@ -182,7 +238,7 @@ uv run streamlit run dashboard/app.py
 
 ---
 
-## 7. Python SDK Quickstart
+## 8. Python SDK Quickstart
 
 Integrate Aegis into your custom Python or LangChain workflows in just a few lines:
 
@@ -237,7 +293,7 @@ tool = AegisPaymentTool(client=client, agent_id="agent-01")
 
 ---
 
-## 8. Payment Providers: Stripe vs Mock
+## 9. Payment Providers: Stripe vs Mock
 
 ### Without Stripe (Default — Mock Provider)
 
