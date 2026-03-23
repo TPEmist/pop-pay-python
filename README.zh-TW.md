@@ -7,7 +7,19 @@ Project Aegis 是專為 Agentic AI（如 OpenClaw、NemoClaw、Claude Code、Ope
 ## 1. 問題背景
 當 Agentic AI 在自動化工作流程中遭遇付費牆（如網域註冊、API 額度、運算資源擴展）時，通常被迫停下來等待人類介入。然而，直接將實體信用卡提供給 Agent 會引發「信任危機」：幻覺（hallucination）或無限迴圈可能導致信用卡被刷爆。
 
-## 2. 生態系定位：Aegis + 瀏覽器 Agent = 所向無敵
+## 2. 雙軌架構 (Dual Architecture)
+
+Project Aegis 基於「雙軌架構」的願景設計，能從開源的本地實驗，輕易擴展至企業級的 AI 生產管線。
+
+### 1. 駭客版 (BYOC + DOM Injection)
+專為 OpenClaw、NemoClaw 等開源框架設計。Agent **永遠不會**拿到真實的信用卡號，只會看到經過遮罩的版本（如 `****-4242`）。當 Agent 成功導航到最後結帳頁面時，Aegis 的 `AegisBrowserInjector` 會透過 Chrome DevTools Protocol (CDP) 直接連線至活躍的 Chromium 瀏覽器，穿透並遍歷所有跨網域 Iframe（如 Stripe Elements），精準將真實的信用卡憑證注入底層的 DOM 表單元素。此機制能提供 **100% 免疫 Prompt Injection** 與幻覺提取的防護。讓你安心在本地環境使用自己的信用卡 (Bring Your Own Card, BYOC)。
+
+### 2. 企業版 (Stripe Issuing)
+更廣泛 Agentic SaaS 生態系的「北極星」。Aegis 證明了它具備真實世界所需的企業級擴展能力，能完美介接合規的金融基礎設施。這非常適合想要建立「Agentic Visa」服務的平台，能透過 Stripe API 替雲端的 AI 艦隊動態發行真實、拋棄式的虛擬信用卡 (VCC)。
+
+---
+
+## 3. 生態系定位：Aegis + 瀏覽器 Agent = 所向無敵
 
 現代 Agentic 工作流程需要兩種互補的能力。Aegis 負責其中之一，並把它做到極致。
 
@@ -64,7 +76,7 @@ Project Aegis 是專為 Agentic AI（如 OpenClaw、NemoClaw、Claude Code、Ope
 
 ---
 
-## 3. 安裝
+## 4. 安裝
 
 ```bash
 # 僅核心功能（關鍵字護欄 + mock provider，零外部依賴）
@@ -83,7 +95,7 @@ pip install aegis-pay[langchain]
 pip install aegis-pay[all]
 ```
 
-## 4. 快速上手 — OpenClaw / NemoClaw / Claude Code / OpenHands
+## 5. 快速上手 — OpenClaw / NemoClaw / Claude Code / OpenHands
 
 如果你使用 OpenClaw、NemoClaw、Claude Code、OpenHands 或任何支援 MCP 的 Agentic 框架，你可以在 2 分鐘內啟動 Aegis：
 
@@ -187,7 +199,7 @@ Agent：「讓我再試一次購買運算資源……上次又失敗了。」
 
 ---
 
-## 5. 核心元件
+## 6. 核心元件
 
 ### 🛡️ The Vault（金庫）
 基於 **Streamlit** 與 **SQLite** (`aegis_state.db`) 的本地視覺化控制台。The Vault 讓人類可以：
@@ -205,10 +217,10 @@ Aegis 提供兩種意圖評估模式，防止 Agent 浪費資金：
 1. **快速關鍵字攔截**（預設）：使用 `GuardrailEngine` 即時阻擋包含迴圈或幻覺相關關鍵字的請求（如「retry」、「failed again」、「ignore previous」）。零依賴、零成本。
 2. **LLM 語意護欄引擎**：由 `LLMGuardrailEngine` 驅動，對 Agent 的推理進行深度語意分析，檢測無關購買或邏輯不一致。支援**任何 OpenAI 相容端點** — 包括透過 Ollama/vLLM 的本地模型，或 OpenAI、OpenRouter 等雲端服務。
 
-## 6. 安全聲明
+## 7. 安全聲明
 安全性是 Aegis 的第一優先。SDK **預設遮罩卡號**（如 `****-****-****-4242`），在回傳授權結果給 Agent 時不會暴露完整卡號。這能防止敏感支付資訊洩漏到 Agent 的對話紀錄、模型上下文視窗或持久化日誌中，確保只有執行環境能處理原始憑證。
 
-## 7. The Vault Dashboard（監控面板）
+## 8. The Vault Dashboard（監控面板）
 
 The Vault 是你即時監控所有 Agent 支付活動的控制台。
 
@@ -238,7 +250,7 @@ uv run streamlit run dashboard/app.py
 
 ---
 
-## 8. Python SDK 快速入門
+## 9. Python SDK 快速入門
 
 只需幾行程式碼即可將 Aegis 整合到你的 Python 或 LangChain 工作流程：
 
@@ -293,7 +305,7 @@ tool = AegisPaymentTool(client=client, agent_id="agent-01")
 
 ---
 
-## 9. 支付供應商：Stripe vs Mock
+## 10. 支付供應商：Stripe vs Mock
 
 ### 不使用 Stripe（預設 — Mock Provider）
 

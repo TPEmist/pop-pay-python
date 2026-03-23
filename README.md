@@ -7,7 +7,7 @@ Project Aegis is a payment guardrail and one-time flow protocol specifically des
 ## 1. The Problem
 When Agentic AI encounters a paywall (e.g., domain registration, API credits, compute scaling) during an automated workflow, it is often forced to stop and wait for human intervention. However, providing a physical credit card directly to an agent introduces a "trust crisis": hallucinations or infinite loops could lead to the card being drained.
 
-## 2. Dual Architecture (雙軌架構)
+## 2. Dual Architecture
 
 Project Aegis is designed with a "Dual Architecture" vision to scale from open-source local experiments to enterprise-grade AI production pipelines.
 
