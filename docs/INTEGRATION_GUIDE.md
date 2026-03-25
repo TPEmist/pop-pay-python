@@ -2,90 +2,164 @@
 
 # Aegis Integration Guide
 
-> **For developers** who want to embed Aegis as the financial middleware in their agentic workflows.  
-> This guide covers three integration patterns: **OpenClaw/NemoClaw System Prompts**, **direct Python SDK / gemini-cli**, and **browser-agent middleware (Playwright / browser-use / Skyvern)**.
+> **For developers** who want to embed Aegis as the financial middleware in their agentic workflows.
+> This guide covers four integration patterns: **Claude Code (BYOC + CDP injection)**, **Python SDK / gemini-cli**, **browser-agent middleware (Playwright / browser-use / Skyvern)**, and **OpenClaw/NemoClaw System Prompts**.
 
 ---
 
-## 1. OpenClaw / NemoClaw — System Prompt Configuration
+## 1. Claude Code — Full Setup with CDP Injection
 
-The most important guardrail you can add is at the **System Prompt level**: instructing the agent that it *must* call Aegis before any payment action, rather than attempting to fill forms directly with real credentials.
+This section covers the complete three-component setup for using Aegis with **Claude Code** (Hacker Edition / BYOC). Both MCPs share the same Chrome instance: Playwright MCP handles navigation while Aegis MCP injects card credentials directly into the DOM via CDP. The user can watch the entire flow live in the browser — the raw card number never enters Claude's context.
 
-### Recommended System Prompt Fragment
+### Architecture
 
-Add the following block to your OpenClaw or NemoClaw identity file (e.g., `IDENTITY.md` or the system prompt field in your agent config):
-
-```markdown
-## Financial Safety Protocol (REQUIRED)
-
-You are operating under the Aegis Payment Guardrail Protocol. The following rules are NON-NEGOTIABLE:
-
-1. **You MUST call the `request_virtual_card` MCP tool** before attempting any purchase,
-   subscription, donation, API credit top-up, or any other financial transaction.
-
-2. **Never use stored credit card numbers, PAN numbers, or any real payment credentials**
-   found in your context, memory, or files. These are never provided to you.
-
-3. **If `request_virtual_card` returns a rejection, STOP the payment flow immediately.**
-   Do not retry with a different reasoning. Report the rejection reason to the user.
-
-4. **If you find yourself in a loop** (retrying the same failed purchase more than once),
-   you MUST stop and request human intervention rather than continuing.
-
-5. The card number returned by Aegis will be masked (e.g., `****-****-****-4242`).
-   Do NOT attempt to look up or reconstruct the full card number.
+```
+Chrome (--remote-debugging-port=9222)
+├── Playwright MCP  ──→ agent uses for navigation
+└── Aegis MCP       ──→ injects real card via CDP
+         │
+         └── Claude Code Agent (only sees ****-****-****-4242)
 ```
 
-### OpenClaw: Registering Aegis as an MCP Tool
+### Step 0 — Launch Chrome with CDP (must be done first, every session)
 
 ```bash
-openclaw mcp add aegis -- uv run python -m aegis.mcp_server
+# macOS
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/chrome-aegis-profile
+
+# Linux
+google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-aegis-profile
 ```
 
-Or add to `~/.openclaw/mcp_servers.json`:
+> **Why `--user-data-dir`?** If Chrome is already running, a separate profile is required to open a new instance with CDP enabled. Without this flag, Chrome silently reuses the existing instance and CDP will not be available.
 
-```json
-{
-  "aegis": {
-    "command": "uv",
-    "args": ["run", "python", "-m", "aegis.mcp_server"],
-    "cwd": "/path/to/Project-Aegis",
-    "env": {
-      "AEGIS_ALLOWED_CATEGORIES": "[\"aws\", \"cloudflare\", \"openai\", \"github\"]",
-      "AEGIS_MAX_PER_TX": "100.0",
-      "AEGIS_MAX_DAILY": "500.0",
-      "AEGIS_BLOCK_LOOPS": "true",
-      "AEGIS_GUARDRAIL_ENGINE": "llm",
-      "AEGIS_LLM_API_KEY": "sk-your-openai-api-key"
-    }
-  }
-}
-```
-
-### NemoClaw (NVIDIA Sandboxed): Additional Notes
-
-NemoClaw's `OpenShell` runtime restricts write access to `/sandbox/` and `/tmp/`.
+Verify that CDP is active:
 
 ```bash
-# Step 1: Clone Aegis inside the sandbox
-nemoclaw my-assistant connect
-cd /sandbox
-git clone https://github.com/TPEmist/Project-Aegis.git
-cd Project-Aegis && uv sync --all-extras
+curl http://localhost:9222/json/version
+# Should return a JSON object with "Browser", "webSocketDebuggerUrl", etc.
+```
 
-# Step 2: Register MCP server (while connected to sandbox)
-openclaw mcp add aegis -- uv run python -m aegis.mcp_server
+**Recommended shell alias** (add to `~/.zshrc` or `~/.bashrc`):
 
-# Step 3: Set env vars (aegis_state.db will write to /sandbox/Project-Aegis/)
-export AEGIS_ALLOWED_CATEGORIES='["aws", "openai"]'
-export AEGIS_MAX_PER_TX=50.0
-export AEGIS_MAX_DAILY=200.0
-# Guardrail mode: "keyword" (default) or "llm" — see README §5 Step 3 for options
+```bash
+# macOS
+alias chrome-cdp='"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-aegis-profile'
+
+# Linux
+alias chrome-cdp='google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-aegis-profile'
+```
+
+> **Shortcut:** `aegis-launch` (included with `aegis-pay`) automates Step 0 and prints the exact `claude mcp add` commands for your machine. Run `aegis-launch --help` for options.
+
+### Step 1 — Configure `.env`
+
+Copy the provided example and fill in your credentials:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and set at minimum:
+
+```bash
+AEGIS_BYOC_NUMBER=4111111111111111   # Your real card number
+AEGIS_BYOC_CVV=123
+AEGIS_BYOC_EXPIRY=12/27
+AEGIS_BYOC_NAME=Your Name
+
+# Policy settings
+AEGIS_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai"]
+AEGIS_MAX_PER_TX=100.0
+AEGIS_MAX_DAILY=500.0
+AEGIS_BLOCK_LOOPS=true
+
+# Optional: Billing fields for auto-fill (name, address, email)
+# AEGIS_BILLING_FIRST_NAME=John
+# AEGIS_BILLING_LAST_NAME=Doe
+# AEGIS_BILLING_STREET=123 Main St
+# AEGIS_BILLING_ZIP=10001
+# AEGIS_BILLING_EMAIL=john@example.com
+
+# Guardrail mode: "keyword" (default, zero-cost) or "llm" (deep semantic analysis)
+# See "Guardrail Mode Configuration" below for the full comparison and LLM config options.
+# AEGIS_GUARDRAIL_ENGINE=keyword
+```
+
+### Guardrail Mode Configuration
+
+By default, Aegis uses the `keyword` engine — a zero-cost, zero-dependency check that blocks obvious hallucination loops and prompt injection phrases. For production or high-value workflows, switch to `llm` mode for deep semantic analysis of each payment reasoning.
+
+| | `keyword` (default) | `llm` |
+|---|---|---|
+| **How it works** | Blocks requests whose `reasoning` string contains suspicious keywords (e.g. "retry", "failed again", "ignore previous instructions") | Sends the agent's `reasoning` to an LLM for deep semantic analysis |
+| **What it catches** | Obvious loops, hallucination phrases, prompt injection attempts | Subtle off-topic purchases, logical inconsistencies, policy violations that keyword matching misses |
+| **Cost** | Zero — no API calls, instant | One LLM call per `request_virtual_card` invocation |
+| **Dependencies** | None | Any OpenAI-compatible endpoint |
+| **Best for** | Development, low-risk workflows, cost-sensitive setups | Production, high-value transactions, untrusted agent pipelines |
+
+**LLM mode:**
+
+```bash
 export AEGIS_GUARDRAIL_ENGINE=llm
-export AEGIS_LLM_API_KEY=sk-your-openai-api-key
+
+# Option A: OpenAI
+export AEGIS_LLM_API_KEY=sk-...
+export AEGIS_LLM_MODEL=gpt-4o-mini          # default
+
+# Option B: Local model via Ollama (free, private)
+export AEGIS_LLM_BASE_URL=http://localhost:11434/v1
+export AEGIS_LLM_MODEL=llama3.2
+# AEGIS_LLM_API_KEY can be set to any non-empty string for Ollama
+
+# Option C: Any OpenAI-compatible endpoint (OpenRouter, vLLM, LM Studio...)
+export AEGIS_LLM_BASE_URL=https://openrouter.ai/api/v1
+export AEGIS_LLM_API_KEY=sk-or-...
+export AEGIS_LLM_MODEL=anthropic/claude-3-haiku
 ```
 
-> **NemoClaw tip:** The System Prompt fragment above is particularly critical in the NemoClaw context, since the agent has broader system-level permissions. Aegis becomes the last financial line of defense inside the sandbox.
+> **Tip:** Start with `keyword` during development. Switch to `llm` when moving to production or when the agent pipeline is handling real money or untrusted inputs.
+
+### Step 2 — Add Aegis MCP to Claude Code
+
+```bash
+claude mcp add aegis -- uv run --project /path/to/Project-Aegis python -m aegis.mcp_server
+```
+
+> The `--project` flag tells `uv` which project directory to use, so the `.env` file and `aegis_state.db` are resolved relative to the correct location.
+
+### Step 3 — Add Playwright MCP to Claude Code
+
+```bash
+claude mcp add playwright -- npx @playwright/mcp@latest --cdp-endpoint http://localhost:9222
+```
+
+> This connects Playwright MCP to the **same Chrome instance** you launched in Step 0. Both MCPs now share one browser window.
+
+### Recommended System Prompt Addition
+
+Add the following block to your Claude Code system prompt (or project `CLAUDE.md`):
+
+```
+Payment rules:
+- Only call request_virtual_card when you can see credit card input fields on the current page
+- After approval, the system auto-fills the card — just click submit
+- Never manually type any card number or CVV
+- If request_virtual_card is rejected, do not retry — report to user
+```
+
+### Full Session Checklist
+
+1. `chrome-cdp` — launch Chrome with CDP
+2. `curl http://localhost:9222/json/version` — verify CDP is up
+3. Start Claude Code — both MCPs connect automatically
+4. Give your agent a task involving a checkout page
+5. Agent navigates via Playwright MCP, calls `request_virtual_card` via Aegis MCP
+6. `AegisBrowserInjector` injects real card via CDP — agent only sees the masked number
+7. Agent clicks submit; card is burned after use
 
 ---
 
@@ -168,6 +242,35 @@ result = await aegis_tool._arun(
 print(result)
 # → "Payment approved. Card Issued: ****-****-****-4242, Expiry: 03/27, ..."
 ```
+
+### Pattern: LLM Guardrail Engine
+
+To use the LLM guardrail engine directly in a Python script (e.g. for local Ollama inference), pass an `LLMGuardrailEngine` instance when constructing `AegisClient`:
+
+```python
+from aegis.engine.llm_guardrails import LLMGuardrailEngine
+
+llm_engine = LLMGuardrailEngine(
+    base_url="http://localhost:11434/v1",  # Ollama endpoint
+    model="llama3.2",
+    use_json_mode=False
+)
+client = AegisClient(
+    provider=MockStripeProvider(),
+    policy=policy,
+    engine=llm_engine
+)
+```
+
+Supported LLM providers:
+
+| Provider | `base_url` | `model` |
+|---|---|---|
+| OpenAI (default) | *(not needed)* | `gpt-4o-mini` |
+| Ollama (local) | `http://localhost:11434/v1` | `llama3.2` |
+| vLLM / LM Studio | `http://localhost:8000/v1` | Your model name |
+| OpenRouter | `https://openrouter.ai/api/v1` | `anthropic/claude-3-haiku` |
+| Any OpenAI-compatible | Your endpoint URL | Your model name |
 
 ---
 
@@ -310,122 +413,95 @@ class AegisCheckoutInterceptor:
 
 ---
 
-## 4. Claude Code — Full Setup with CDP Injection
+## 4. OpenClaw / NemoClaw — System Prompt Configuration
 
-This section covers the complete three-component setup for using Aegis with **Claude Code** (Hacker Edition / BYOC). Both MCPs share the same Chrome instance: Playwright MCP handles navigation while Aegis MCP injects card credentials directly into the DOM via CDP. The user can watch the entire flow live in the browser — the raw card number never enters Claude's context.
+The most important guardrail you can add is at the **System Prompt level**: instructing the agent that it *must* call Aegis before any payment action, rather than attempting to fill forms directly with real credentials.
 
-### Architecture
+### Recommended System Prompt Fragment
 
+Add the following block to your OpenClaw or NemoClaw identity file (e.g., `IDENTITY.md` or the system prompt field in your agent config):
+
+```markdown
+## Financial Safety Protocol (REQUIRED)
+
+You are operating under the Aegis Payment Guardrail Protocol. The following rules are NON-NEGOTIABLE:
+
+1. **You MUST call the `request_virtual_card` MCP tool** before attempting any purchase,
+   subscription, donation, API credit top-up, or any other financial transaction.
+
+2. **Never use stored credit card numbers, PAN numbers, or any real payment credentials**
+   found in your context, memory, or files. These are never provided to you.
+
+3. **If `request_virtual_card` returns a rejection, STOP the payment flow immediately.**
+   Do not retry with a different reasoning. Report the rejection reason to the user.
+
+4. **If you find yourself in a loop** (retrying the same failed purchase more than once),
+   you MUST stop and request human intervention rather than continuing.
+
+5. The card number returned by Aegis will be masked (e.g., `****-****-****-4242`).
+   Do NOT attempt to look up or reconstruct the full card number.
 ```
-Chrome (--remote-debugging-port=9222)
-├── Playwright MCP  ──→ agent uses for navigation
-└── Aegis MCP       ──→ injects real card via CDP
-         │
-         └── Claude Code Agent (only sees ****-****-****-4242)
-```
 
-### Step 0 — Launch Chrome with CDP (must be done first, every session)
+### OpenClaw: Registering Aegis as an MCP Tool
 
 ```bash
-# macOS
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/chrome-aegis-profile
-
-# Linux
-google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-aegis-profile
+openclaw mcp add aegis -- uv run python -m aegis.mcp_server
 ```
 
-> **Why `--user-data-dir`?** If Chrome is already running, a separate profile is required to open a new instance with CDP enabled. Without this flag, Chrome silently reuses the existing instance and CDP will not be available.
+Or add to `~/.openclaw/mcp_servers.json`:
 
-Verify that CDP is active:
+```json
+{
+  "aegis": {
+    "command": "uv",
+    "args": ["run", "python", "-m", "aegis.mcp_server"],
+    "cwd": "/path/to/Project-Aegis",
+    "env": {
+      "AEGIS_ALLOWED_CATEGORIES": "[\"aws\", \"cloudflare\", \"openai\", \"github\"]",
+      "AEGIS_MAX_PER_TX": "100.0",
+      "AEGIS_MAX_DAILY": "500.0",
+      "AEGIS_BLOCK_LOOPS": "true",
+      "AEGIS_GUARDRAIL_ENGINE": "llm",
+      "AEGIS_LLM_API_KEY": "sk-your-openai-api-key"
+    }
+  }
+}
+```
+
+### NemoClaw (NVIDIA Sandboxed): Additional Notes
+
+NemoClaw's `OpenShell` runtime restricts write access to `/sandbox/` and `/tmp/`.
 
 ```bash
-curl http://localhost:9222/json/version
-# Should return a JSON object with "Browser", "webSocketDebuggerUrl", etc.
+# Step 1: Clone Aegis inside the sandbox
+nemoclaw my-assistant connect
+cd /sandbox
+git clone https://github.com/TPEmist/Project-Aegis.git
+cd Project-Aegis && uv sync --all-extras
+
+# Step 2: Register MCP server (while connected to sandbox)
+openclaw mcp add aegis -- uv run python -m aegis.mcp_server
+
+# Step 3: Set env vars (aegis_state.db will write to /sandbox/Project-Aegis/)
+export AEGIS_ALLOWED_CATEGORIES='["aws", "openai"]'
+export AEGIS_MAX_PER_TX=50.0
+export AEGIS_MAX_DAILY=200.0
+# Guardrail mode: "keyword" (default) or "llm" — see §1 "Guardrail Mode Configuration" for options
+export AEGIS_GUARDRAIL_ENGINE=llm
+export AEGIS_LLM_API_KEY=sk-your-openai-api-key
 ```
 
-**Recommended shell alias** (add to `~/.zshrc` or `~/.bashrc`):
-
-```bash
-# macOS
-alias chrome-cdp='"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-aegis-profile'
-
-# Linux
-alias chrome-cdp='google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-aegis-profile'
-```
-
-### Step 1 — Configure `.env`
-
-Copy the provided example and fill in your credentials:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set at minimum:
-
-```bash
-AEGIS_BYOC_NUMBER=4111111111111111   # Your real card number
-AEGIS_BYOC_CVV=123
-AEGIS_BYOC_EXPIRY=12/27
-AEGIS_BYOC_NAME=Your Name
-
-# Policy settings
-AEGIS_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai"]
-AEGIS_MAX_PER_TX=100.0
-AEGIS_MAX_DAILY=500.0
-AEGIS_BLOCK_LOOPS=true
-
-# Guardrail mode: "keyword" (default, zero-cost) or "llm" (deep semantic analysis)
-# See README §5 Step 3 for the full comparison table and LLM config options.
-# AEGIS_GUARDRAIL_ENGINE=keyword
-```
-
-### Step 2 — Add Aegis MCP to Claude Code
-
-```bash
-claude mcp add aegis -- uv run --project /path/to/Project-Aegis python -m aegis.mcp_server
-```
-
-> The `--project` flag tells `uv` which project directory to use, so the `.env` file and `aegis_state.db` are resolved relative to the correct location.
-
-### Step 3 — Add Playwright MCP to Claude Code
-
-```bash
-claude mcp add playwright -- npx @playwright/mcp@latest --cdp-endpoint http://localhost:9222
-```
-
-> This connects Playwright MCP to the **same Chrome instance** you launched in Step 0. Both MCPs now share one browser window.
-
-### Recommended System Prompt Addition
-
-Add the following block to your Claude Code system prompt (or project `CLAUDE.md`):
-
-```
-Payment rules:
-- Only call request_virtual_card when you can see credit card input fields on the current page
-- After approval, the system auto-fills the card — just click submit
-- Never manually type any card number or CVV
-- If request_virtual_card is rejected, do not retry — report to user
-```
-
-### Full Session Checklist
-
-1. `chrome-cdp` — launch Chrome with CDP
-2. `curl http://localhost:9222/json/version` — verify CDP is up
-3. Start Claude Code — both MCPs connect automatically
-4. Give your agent a task involving a checkout page
-5. Agent navigates via Playwright MCP, calls `request_virtual_card` via Aegis MCP
-6. `AegisBrowserInjector` injects real card via CDP — agent only sees the masked number
-7. Agent clicks submit; card is burned after use
+> **NemoClaw tip:** The System Prompt fragment above is particularly critical in the NemoClaw context, since the agent has broader system-level permissions. Aegis becomes the last financial line of defense inside the sandbox.
 
 ---
 
 ## See Also
 
 - [README.md](../README.md) — Main project overview and quick start
+- [§1 Claude Code](#1-claude-code--full-setup-with-cdp-injection) — Full BYOC + CDP injection setup (most common)
+- [§2 Python SDK / gemini-cli](#2-gemini-cli--python-script-integration) — Direct SDK embedding and LangChain tool pattern
+- [§3 Browser Agents](#3-browser-agent-middleware-playwright--browser-use--skyvern) — Playwright / browser-use / Skyvern integration
+- [§4 OpenClaw / NemoClaw](#4-openclaw--nemoclaw--system-prompt-configuration) — System prompt configuration for OpenClaw and NemoClaw
 - [examples/agent_vault_flow.py](../examples/agent_vault_flow.py) — Full Playwright browser injection example
 - [examples/e2e_demo.py](../examples/e2e_demo.py) — SDK-only end-to-end demo (no browser)
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — How to add new payment providers or guardrail engines

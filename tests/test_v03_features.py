@@ -122,7 +122,7 @@ async def test_injector_no_fields_returns_false():
         inj = Inj(tracker)
         result = await inj.inject_payment_info("seal-abc")
 
-    assert result is False
+    assert result == {"card_filled": False, "billing_filled": False}
     tracker.close()
 
 

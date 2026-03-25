@@ -122,107 +122,15 @@ uv run python -m aegis.mcp_server
 
 ### Step 2: Connect to Your Agent
 
-**OpenClaw:**
-```bash
-# Register Aegis as an MCP tool in OpenClaw
-openclaw mcp add aegis -- uv run python -m aegis.mcp_server
+Choose your platform and follow the dedicated setup guide:
 
-# Or add to your OpenClaw MCP config file (~/.openclaw/mcp_servers.json)
-```
-```json
-{
-  "aegis": {
-    "command": "uv",
-    "args": ["run", "python", "-m", "aegis.mcp_server"],
-    "cwd": "/path/to/Project-Aegis",
-    "env": {
-      "AEGIS_ALLOWED_CATEGORIES": "[\"aws\", \"cloudflare\", \"openai\"]",
-      "AEGIS_MAX_PER_TX": "100.0",
-      "AEGIS_MAX_DAILY": "500.0"
-    }
-  }
-}
-```
-
-**NemoClaw (NVIDIA sandbox):**
-
-NemoClaw wraps OpenClaw agents in a secure sandbox. Configure Aegis inside your NemoClaw sandbox by editing the MCP config within the sandbox environment:
-
-```bash
-# Connect to your NemoClaw sandbox
-nemoclaw my-assistant connect
-
-# Inside the sandbox, register the Aegis MCP server
-openclaw mcp add aegis -- uv run python -m aegis.mcp_server
-```
-
-> **Note:** NemoClaw restricts file access. Make sure Project-Aegis is cloned inside `/sandbox/` so the agent can access it. The `aegis_state.db` will be created in the sandbox's writable directory.
-
-**Claude Code (Hacker Edition / BYOC — Full Setup):**
-
-Claude Code requires three components to enable live CDP card injection. Playwright MCP navigates websites while Aegis injects real card credentials into the same browser window — the card number never enters AI context.
-
-**Step 0 — Launch Chrome with CDP (required every session, must be done first):**
-```bash
-# macOS
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/chrome-aegis-profile
-
-# Linux
-google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-aegis-profile
-```
-> `--user-data-dir` is required if Chrome is already running — it opens a separate instance with CDP enabled.
-> Verify: `curl http://localhost:9222/json/version`
-
-**Step 1 — Configure `.env` (copy from `.env.example`):**
-```bash
-cp .env.example .env
-# Edit .env: set AEGIS_BYOC_NUMBER, AEGIS_BYOC_CVV, AEGIS_BYOC_EXPIRY, etc.
-```
-
-**Step 2 — Add Aegis MCP to Claude Code:**
-```bash
-claude mcp add aegis -- uv run --project /path/to/Project-Aegis python -m aegis.mcp_server
-```
-
-**Step 3 — Add Playwright MCP (connected to the same Chrome via CDP):**
-```bash
-claude mcp add playwright -- npx @playwright/mcp@latest --cdp-endpoint http://localhost:9222
-```
-
-**Architecture:**
-```
-Chrome (--remote-debugging-port=9222)
-├── Playwright MCP  ──→ agent uses for navigation
-└── Aegis MCP       ──→ injects real card via CDP
-         │
-         └── Claude Code Agent (only sees ****-****-****-4242)
-```
-
-**Recommended System Prompt addition:**
-```
-Payment rules:
-- Only call request_virtual_card when you can see credit card input fields on the current page
-- After approval, the system auto-fills the card — just click submit
-- Never manually type any card number or CVV
-- If request_virtual_card is rejected, do not retry — report to user
-```
-
-> See **[docs/INTEGRATION_GUIDE.md §4](./docs/INTEGRATION_GUIDE.md#4-claude-code--full-setup-with-cdp-injection)** for the full step-by-step guide including shell aliases.
-
-**OpenHands:** Add to your MCP configuration:
-```json
-{
-  "mcpServers": {
-    "aegis": {
-      "command": "uv",
-      "args": ["run", "python", "-m", "aegis.mcp_server"],
-      "cwd": "/path/to/Project-Aegis"
-    }
-  }
-}
-```
+| Platform | Setup Guide |
+|---|---|
+| **Claude Code** (BYOC + CDP injection, recommended) | [Integration Guide §1](./docs/INTEGRATION_GUIDE.md#1-claude-code--full-setup-with-cdp-injection) |
+| **Python script / gemini-cli** | [Integration Guide §2](./docs/INTEGRATION_GUIDE.md#2-gemini-cli--python-script-integration) |
+| **Playwright / browser-use / Skyvern** | [Integration Guide §3](./docs/INTEGRATION_GUIDE.md#3-browser-agent-middleware-playwright--browser-use--skyvern) |
+| **OpenClaw / NemoClaw** | [Integration Guide §4](./docs/INTEGRATION_GUIDE.md#4-openclaw--nemoclaw--system-prompt-configuration) |
+| **OpenHands** | Add `uv run python -m aegis.mcp_server` to your `mcpServers` config |
 
 ### Step 3: Configure Your Policy (Environment Variables)
 
@@ -246,34 +154,7 @@ Aegis ships with two guardrail engines. You switch between them with a single en
 | **Dependencies** | None | Any OpenAI-compatible endpoint |
 | **Best for** | Development, low-risk workflows, cost-sensitive setups | Production, high-value transactions, untrusted agent pipelines |
 
-**Keyword mode (default — no extra config needed):**
-```bash
-# AEGIS_GUARDRAIL_ENGINE defaults to "keyword" if not set
-export AEGIS_ALLOWED_CATEGORIES='["aws", "cloudflare", "openai"]'
-export AEGIS_MAX_PER_TX=100.0
-export AEGIS_MAX_DAILY=500.0
-```
-
-**LLM mode:**
-```bash
-export AEGIS_GUARDRAIL_ENGINE=llm
-
-# Option A: OpenAI
-export AEGIS_LLM_API_KEY=sk-...
-export AEGIS_LLM_MODEL=gpt-4o-mini          # default
-
-# Option B: Local model via Ollama (free, private)
-export AEGIS_LLM_BASE_URL=http://localhost:11434/v1
-export AEGIS_LLM_MODEL=llama3.2
-# AEGIS_LLM_API_KEY can be set to any non-empty string for Ollama
-
-# Option C: Any OpenAI-compatible endpoint (OpenRouter, vLLM, LM Studio...)
-export AEGIS_LLM_BASE_URL=https://openrouter.ai/api/v1
-export AEGIS_LLM_API_KEY=sk-or-...
-export AEGIS_LLM_MODEL=anthropic/claude-3-haiku
-```
-
-> **Tip:** For most personal use cases, keyword mode is sufficient. Switch to LLM mode when your agent operates with broad permissions or handles high-value transactions where subtle misuse is a real concern.
+> **Tip:** `keyword` mode requires no extra config. To enable LLM mode, see the [full configuration reference in the Integration Guide §1](./docs/INTEGRATION_GUIDE.md#guardrail-mode-configuration).
 
 ### Step 4: Use It
 
@@ -372,34 +253,12 @@ client = AegisClient(
     db_path="aegis_state.db"
 )
 
-# Or use LLM-based guardrails with a local model (e.g., Ollama)
-from aegis.engine.llm_guardrails import LLMGuardrailEngine
-
-llm_engine = LLMGuardrailEngine(
-    base_url="http://localhost:11434/v1",  # Ollama endpoint
-    model="llama3.2",
-    use_json_mode=False
-)
-client = AegisClient(
-    provider=MockStripeProvider(),
-    policy=policy,
-    engine=llm_engine
-)
-
 # Use with LangChain Tool
 from aegis.tools.langchain import AegisPaymentTool
 tool = AegisPaymentTool(client=client, agent_id="agent-01")
 ```
 
-### Supported LLM Providers
-
-| Provider | `base_url` | `model` |
-|---|---|---|
-| OpenAI (default) | *(not needed)* | `gpt-4o-mini` |
-| Ollama (local) | `http://localhost:11434/v1` | `llama3.2` |
-| vLLM / LM Studio | `http://localhost:8000/v1` | Your model name |
-| OpenRouter | `https://openrouter.ai/api/v1` | `anthropic/claude-3-haiku` |
-| Any OpenAI-compatible | Your endpoint URL | Your model name |
+> For LLM guardrail engine setup and the full provider reference, see [Integration Guide §2](./docs/INTEGRATION_GUIDE.md#2-gemini-cli--python-script-integration).
 
 ---
 
@@ -413,15 +272,6 @@ By default, Aegis uses the `MockStripeProvider` which simulates virtual card iss
 - **Hackathons** — get a working prototype in minutes
 
 Mock cards are fully functional within the Aegis system (budget tracking, burn-after-use, guardrails all work), but they are not real payment instruments.
-
-```python
-from aegis.providers.stripe_mock import MockStripeProvider
-
-client = AegisClient(
-    provider=MockStripeProvider(),  # No API key needed
-    policy=policy
-)
-```
 
 ### BYOC — Bring Your Own Card (Hacker Edition)
 
@@ -441,16 +291,9 @@ uv run python -m aegis.mcp_server
 
 If `AEGIS_STRIPE_KEY` is set, Stripe takes precedence. If `AEGIS_BYOC_NUMBER` is set (but no Stripe key), `LocalVaultProvider` is used. If neither is set, `MockStripeProvider` is used for development.
 
-```python
-from aegis.providers.byoc_local import LocalVaultProvider
-
-client = AegisClient(
-    provider=LocalVaultProvider(),  # reads from env vars automatically
-    policy=policy
-)
-```
-
 > **Security note:** Never commit real card numbers to version control. Always use `.env` (which is `.gitignore`d) or a secrets manager. The CDP injection ensures the full card number is only handled by the local trusted process, never by the LLM.
+
+> For Python SDK usage of each provider, see [Integration Guide §2](./docs/INTEGRATION_GUIDE.md#2-gemini-cli--python-script-integration).
 
 ### With Real Stripe Issuing
 
@@ -465,16 +308,6 @@ To issue **real virtual credit cards** through [Stripe Issuing](https://stripe.c
 export AEGIS_STRIPE_KEY=sk_live_your_stripe_key_here
 uv run python -m aegis.mcp_server
 # The MCP server will automatically use StripeIssuingProvider
-```
-
-**Option B: Via Python SDK**
-```python
-from aegis.providers.stripe_real import StripeIssuingProvider
-
-client = AegisClient(
-    provider=StripeIssuingProvider(api_key="sk_live_your_stripe_key_here"),
-    policy=policy
-)
 ```
 
 **What Stripe Issuing does:**
