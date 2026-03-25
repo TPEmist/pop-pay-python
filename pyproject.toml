@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aegis-pay"
-version = "0.3.3"
+version = "0.3.4"
 description = "Semantic Payment Guardrail for AI Agents"
 authors = [{name="Aegis Team"}]
 readme = "README.pypi.md"
