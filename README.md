@@ -231,13 +231,49 @@ export AEGIS_ALLOWED_CATEGORIES='["aws", "cloudflare", "openai", "github"]'
 export AEGIS_MAX_PER_TX=100.0        # Max $100 per single transaction
 export AEGIS_MAX_DAILY=500.0         # Max $500 per day total
 export AEGIS_BLOCK_LOOPS=true        # Block hallucination/retry loops
-# Optional: Enable LLM Guardrails (replaces default keyword setup)
-export AEGIS_GUARDRAIL_ENGINE=llm    # 'keyword' or 'llm'
-export AEGIS_LLM_API_KEY=sk-...      # required if using OpenAI
-# export AEGIS_LLM_BASE_URL=http://localhost:11434/v1  # For Ollama
-# export AEGIS_LLM_MODEL=llama3.2
 # Optional: export AEGIS_STRIPE_KEY=sk_live_... (see §8 for Stripe setup)
 ```
+
+#### Guardrail Mode: Keyword vs LLM
+
+Aegis ships with two guardrail engines. You switch between them with a single env var:
+
+| | `keyword` (default) | `llm` |
+|---|---|---|
+| **How it works** | Blocks requests whose `reasoning` string contains suspicious keywords (e.g. "retry", "failed again", "ignore previous instructions") | Sends the agent's `reasoning` to an LLM for deep semantic analysis |
+| **What it catches** | Obvious loops, hallucination phrases, prompt injection attempts | Subtle off-topic purchases, logical inconsistencies, policy violations that keyword matching misses |
+| **Cost** | Zero — no API calls, instant | One LLM call per `request_virtual_card` invocation |
+| **Dependencies** | None | Any OpenAI-compatible endpoint |
+| **Best for** | Development, low-risk workflows, cost-sensitive setups | Production, high-value transactions, untrusted agent pipelines |
+
+**Keyword mode (default — no extra config needed):**
+```bash
+# AEGIS_GUARDRAIL_ENGINE defaults to "keyword" if not set
+export AEGIS_ALLOWED_CATEGORIES='["aws", "cloudflare", "openai"]'
+export AEGIS_MAX_PER_TX=100.0
+export AEGIS_MAX_DAILY=500.0
+```
+
+**LLM mode:**
+```bash
+export AEGIS_GUARDRAIL_ENGINE=llm
+
+# Option A: OpenAI
+export AEGIS_LLM_API_KEY=sk-...
+export AEGIS_LLM_MODEL=gpt-4o-mini          # default
+
+# Option B: Local model via Ollama (free, private)
+export AEGIS_LLM_BASE_URL=http://localhost:11434/v1
+export AEGIS_LLM_MODEL=llama3.2
+# AEGIS_LLM_API_KEY can be set to any non-empty string for Ollama
+
+# Option C: Any OpenAI-compatible endpoint (OpenRouter, vLLM, LM Studio...)
+export AEGIS_LLM_BASE_URL=https://openrouter.ai/api/v1
+export AEGIS_LLM_API_KEY=sk-or-...
+export AEGIS_LLM_MODEL=anthropic/claude-3-haiku
+```
+
+> **Tip:** For most personal use cases, keyword mode is sufficient. Switch to LLM mode when your agent operates with broad permissions or handles high-value transactions where subtle misuse is a real concern.
 
 ### Step 4: Use It
 
@@ -273,9 +309,11 @@ Virtual, single-use payment credentials with built-in enforcement:
 - **Burn-after-use Interception**: Ensures that once a virtual card is used, it is immediately invalidated, preventing replay attacks or unauthorized recurring charges.
 
 ### 🧠 Semantic Guardrails
-Aegis provides two modes of intent evaluation to prevent agents from wasting funds:
-1. **Fast Keyword-based Interception** (Default): Uses the `GuardrailEngine` to immediately block requests containing keywords associated with loops or hallucinations (e.g., "retry", "failed again", "ignore previous"). Zero dependencies, zero cost.
-2. **LLM-based Guardrail Engine**: Powered by the `LLMGuardrailEngine`, this mode performs deep semantic analysis of the agent's reasoning to detect unrelated purchases or logical inconsistencies. Supports **any OpenAI-compatible endpoint** — including local models via Ollama/vLLM, or cloud providers like OpenAI and OpenRouter.
+Aegis provides two modes of intent evaluation. Both are controlled by `AEGIS_GUARDRAIL_ENGINE` in your `.env` (see [§5 Step 3](#step-3-configure-your-policy-environment-variables) for full configuration).
+
+1. **Keyword mode** (`AEGIS_GUARDRAIL_ENGINE=keyword`, **default**): The `GuardrailEngine` scans the agent's `reasoning` string for suspicious phrases associated with loops or hallucinations (e.g., `"retry"`, `"failed again"`, `"ignore previous"`). Zero dependencies, zero latency, zero cost. Recommended as the starting point for all setups.
+
+2. **LLM mode** (`AEGIS_GUARDRAIL_ENGINE=llm`): The `LLMGuardrailEngine` sends the agent's `reasoning` to an LLM for deep semantic analysis, catching subtler misuse that keyword matching would miss — such as off-topic purchases or logically inconsistent justifications. Supports **any OpenAI-compatible endpoint**: OpenAI, Ollama (local), vLLM, OpenRouter, and more.
 
 ## 7. Security Statement
 Security is a first-class citizen in Aegis. The SDK **masks card numbers by default** (e.g., `****-****-****-4242`) when returning authorization results to the agent. This prevents sensitive payment information from leaking into agent chat logs, model context windows, or persistent logs, ensuring that only the execution environment handles the raw credentials.

@@ -231,13 +231,49 @@ export AEGIS_ALLOWED_CATEGORIES='["aws", "cloudflare", "openai", "github"]'
 export AEGIS_MAX_PER_TX=100.0        # 單筆交易上限 $100
 export AEGIS_MAX_DAILY=500.0         # 每日總預算上限 $500
 export AEGIS_BLOCK_LOOPS=true        # 阻擋幻覺 / 重試迴圈
-# 可選: 啟用 LLM 語意護欄引擎（取代預設的關鍵字引擎）
-export AEGIS_GUARDRAIL_ENGINE=llm    # 'keyword' 或 'llm'
-export AEGIS_LLM_API_KEY=sk-...      # OpenAI API Key，如使用雲端模型必須設定能
-# export AEGIS_LLM_BASE_URL=http://localhost:11434/v1  # 自訂端點，例如 Ollama
-# export AEGIS_LLM_MODEL=llama3.2    # 取代預設的 gpt-4o-mini
 # 可選：export AEGIS_STRIPE_KEY=sk_live_...（Stripe 設定請見 §8）
 ```
+
+#### 護欄模式：關鍵字 vs LLM
+
+Aegis 提供兩種護欄引擎，透過一個環境變數切換：
+
+| | `keyword`（預設） | `llm` |
+|---|---|---|
+| **運作方式** | 掃描 Agent 的 `reasoning` 字串，比對可疑關鍵字（如「retry」、「failed again」、「ignore previous instructions」） | 將 Agent 的 `reasoning` 送給 LLM 進行深度語意分析 |
+| **能攔截的威脅** | 明顯的迴圈、幻覺語句、Prompt Injection 嘗試 | 關鍵字比對會漏掉的細微誤用：不相關的購買、邏輯矛盾、政策違反 |
+| **成本** | 零 — 無 API 呼叫，即時回應 | 每次 `request_virtual_card` 一次 LLM 呼叫 |
+| **依賴** | 無 | 任何 OpenAI 相容端點 |
+| **適合場景** | 開發測試、低風險工作流、成本敏感的設定 | 正式上線、高價值交易、不完全信任的 Agent 管線 |
+
+**關鍵字模式（預設，無需額外設定）：**
+```bash
+# AEGIS_GUARDRAIL_ENGINE 不設定時預設為 "keyword"
+export AEGIS_ALLOWED_CATEGORIES='["aws", "cloudflare", "openai"]'
+export AEGIS_MAX_PER_TX=100.0
+export AEGIS_MAX_DAILY=500.0
+```
+
+**LLM 模式：**
+```bash
+export AEGIS_GUARDRAIL_ENGINE=llm
+
+# 選項 A：OpenAI
+export AEGIS_LLM_API_KEY=sk-...
+export AEGIS_LLM_MODEL=gpt-4o-mini          # 預設值
+
+# 選項 B：透過 Ollama 使用本地模型（免費、私密）
+export AEGIS_LLM_BASE_URL=http://localhost:11434/v1
+export AEGIS_LLM_MODEL=llama3.2
+# Ollama 不需要真實 API Key，設為任意非空字串即可
+
+# 選項 C：任何 OpenAI 相容端點（OpenRouter、vLLM、LM Studio…）
+export AEGIS_LLM_BASE_URL=https://openrouter.ai/api/v1
+export AEGIS_LLM_API_KEY=sk-or-...
+export AEGIS_LLM_MODEL=anthropic/claude-3-haiku
+```
+
+> **建議**：個人使用情境下，關鍵字模式通常就夠用。若你的 Agent 擁有較廣泛的操作權限，或需要處理高價值交易，再考慮切換到 LLM 模式。
 
 ### 步驟四：開始使用
 
@@ -273,9 +309,11 @@ Agent：「讓我再試一次購買運算資源……上次又失敗了。」
 - **用後即焚攔截**：確保虛擬卡一旦被使用後立即失效，防止重播攻擊或未授權的重複扣款。
 
 ### 🧠 語意護欄（Semantic Guardrails）
-Aegis 提供兩種意圖評估模式，防止 Agent 浪費資金：
-1. **快速關鍵字攔截**（預設）：使用 `GuardrailEngine` 即時阻擋包含迴圈或幻覺相關關鍵字的請求（如「retry」、「failed again」、「ignore previous」）。零依賴、零成本。
-2. **LLM 語意護欄引擎**：由 `LLMGuardrailEngine` 驅動，對 Agent 的推理進行深度語意分析，檢測無關購買或邏輯不一致。支援**任何 OpenAI 相容端點** — 包括透過 Ollama/vLLM 的本地模型，或 OpenAI、OpenRouter 等雲端服務。
+Aegis 提供兩種意圖評估模式，皆透過 `.env` 中的 `AEGIS_GUARDRAIL_ENGINE` 控制（完整設定請見 [§5 步驟三](#步驟三設定你的安全策略環境變數)）。
+
+1. **關鍵字模式**（`AEGIS_GUARDRAIL_ENGINE=keyword`，**預設**）：`GuardrailEngine` 掃描 Agent 的 `reasoning` 字串，攔截與迴圈或幻覺相關的可疑詞彙（如 `"retry"`、`"failed again"`、`"ignore previous"`）。零依賴、零延遲、零成本。建議所有部署從此模式開始。
+
+2. **LLM 模式**（`AEGIS_GUARDRAIL_ENGINE=llm`）：`LLMGuardrailEngine` 將 Agent 的 `reasoning` 送往 LLM 進行深度語意分析，能捕捉關鍵字比對無法識別的細微濫用行為 — 例如離題購買或邏輯前後矛盾的理由。支援**任何 OpenAI 相容端點**：OpenAI、Ollama（本地）、vLLM、OpenRouter 等。
 
 ## 7. 安全聲明
 安全性是 Aegis 的第一優先。SDK **預設遮罩卡號**（如 `****-****-****-4242`），在回傳授權結果給 Agent 時不會暴露完整卡號。這能防止敏感支付資訊洩漏到 Agent 的對話紀錄、模型上下文視窗或持久化日誌中，確保只有執行環境能處理原始憑證。

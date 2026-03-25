@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aegis-pay"
-version = "0.3.4"
+version = "0.3.5"
 description = "Semantic Payment Guardrail for AI Agents"
 authors = [{name="Aegis Team"}]
 dynamic = ["readme"]
