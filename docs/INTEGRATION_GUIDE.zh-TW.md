@@ -100,6 +100,8 @@ AEGIS_BLOCK_LOOPS=true
 # AEGIS_GUARDRAIL_ENGINE=keyword
 ```
 
+> **⚠️  修改 `.env` 後，請重新啟動 Agent 會話**（例如關閉並重新開啟 Claude Code）以使更改生效。MCP 伺服器在啟動時僅加載一次配置，不支援熱重載。
+
 ### 護欄模式設定
 
 Aegis 預設使用 `keyword` 引擎 — 這是一個零成本、零相依性的檢查機制，可攔截明顯的幻覺迴圈與提示注入語句。對於正式環境或高價值工作流程，可切換至 `llm` 模式，對每筆支付的理由進行深度語意分析。
@@ -175,6 +177,7 @@ Payment rules:
 
 1. `aegis-launch` — 啟動 Chrome CDP 並印出 `claude mcp add` 指令
 2. 啟動 Claude Code — 兩個 MCP 會自動連線
+   - 如果自上次會話以來修改了 `.env`，則必須重啟以使新配置生效
 4. 給 Agent 指派一個涉及結帳頁面的任務
 5. Agent 透過 Playwright MCP 導航，透過 Aegis MCP 呼叫 `request_virtual_card`
 6. `AegisBrowserInjector` 透過 CDP 注入真實卡片 — Agent 只看到遮罩後的卡號

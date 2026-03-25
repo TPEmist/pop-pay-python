@@ -100,6 +100,8 @@ AEGIS_BLOCK_LOOPS=true
 # AEGIS_GUARDRAIL_ENGINE=keyword
 ```
 
+> **⚠️  After editing `.env`, restart your agent session** (e.g. close and reopen Claude Code) for the changes to take effect. The MCP server loads configuration once at startup — it does not hot-reload.
+
 ### Guardrail Mode Configuration
 
 By default, Aegis uses the `keyword` engine — a zero-cost, zero-dependency check that blocks obvious hallucination loops and prompt injection phrases. For production or high-value workflows, switch to `llm` mode for deep semantic analysis of each payment reasoning.
@@ -175,6 +177,7 @@ Payment rules:
 
 1. `aegis-launch` — launches Chrome with CDP and prints the `claude mcp add` commands
 2. Start Claude Code — both MCPs connect automatically
+   - If you changed `.env` since last session, this restart is required for new config to take effect
 4. Give your agent a task involving a checkout page
 5. Agent navigates via Playwright MCP, calls `request_virtual_card` via Aegis MCP
 6. `AegisBrowserInjector` injects real card via CDP — agent only sees the masked number

@@ -142,6 +142,8 @@ export AEGIS_BLOCK_LOOPS=true        # 阻擋幻覺 / 重試迴圈
 # 可選：export AEGIS_STRIPE_KEY=sk_live_...（Stripe 設定請見 §8）
 ```
 
+> **⚠️  修改 `.env` 後，請重新啟動 Agent 會話**（例如關閉並重新開啟 Claude Code）以使更改生效。MCP 伺服器在啟動時僅加載一次配置，不支援熱重載。
+
 #### 護欄模式：關鍵字 vs LLM
 
 Aegis 提供兩種護欄引擎，透過一個環境變數切換：

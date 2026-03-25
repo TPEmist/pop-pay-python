@@ -142,6 +142,8 @@ export AEGIS_BLOCK_LOOPS=true        # Block hallucination/retry loops
 # Optional: export AEGIS_STRIPE_KEY=sk_live_... (see §8 for Stripe setup)
 ```
 
+> **⚠️  After editing `.env`, restart your agent session** (e.g. close and reopen Claude Code) for the changes to take effect. The MCP server loads configuration once at startup — it does not hot-reload.
+
 #### Guardrail Mode: Keyword vs LLM
 
 Aegis ships with two guardrail engines. You switch between them with a single env var:

@@ -1,7 +1,10 @@
 import os
 import json
 import asyncio
+from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
+
+load_dotenv()
 from aegis.core.models import PaymentIntent, GuardrailPolicy
 from aegis.providers.stripe_mock import MockStripeProvider
 from aegis.providers.stripe_real import StripeIssuingProvider
