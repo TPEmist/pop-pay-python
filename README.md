@@ -68,18 +68,14 @@ The real power emerges when Aegis is paired with a browser automation agent (e.g
 5. [The Vault]  Dashboard logs the transaction. Card is immediately burned.
 ```
 
-### 🌐 Supported Browser Agent Integrations
+### 🌐 Supported Integrations
 
-| Browser Agent | Integration Method | Guide |
-|---|---|---|
-| **OpenHands** | MCP Tool Call | [Quick Start §5](#5-quick-start-for-openclaw--nemoclaw--claude-code--openhands) |
-| **OpenClaw + browser-use** | MCP Tool Call | [Quick Start §5](#5-quick-start-for-openclaw--nemoclaw--claude-code--openhands) |
-| **NemoClaw (sandboxed)** | MCP Tool Call inside sandbox | [Quick Start §5](#5-quick-start-for-openclaw--nemoclaw--claude-code--openhands) |
-| **Claude Code + Playwright MCP** | Aegis MCP + CDP injection | [Integration Guide §4](./docs/INTEGRATION_GUIDE.md#4-claude-code--full-setup-with-cdp-injection) |
-| **Custom Playwright / Selenium** | Python SDK `AegisClient` | [Integration Guide](./docs/INTEGRATION_GUIDE.md) |
-| **Skyvern / browser-use** | Python SDK middleware | [Integration Guide](./docs/INTEGRATION_GUIDE.md) |
+| Integration path | Works with |
+|---|---|
+| **MCP Tool** | Claude Code, OpenClaw, NemoClaw, OpenHands, any MCP-compatible host |
+| **Python SDK** | Custom Playwright, browser-use, Skyvern, Selenium, gemini-cli |
 
-> See **[docs/INTEGRATION_GUIDE.md](./docs/INTEGRATION_GUIDE.md)** for end-to-end code examples including Playwright injection and System Prompt templates.
+> **Claude Code** gets full CDP injection — card is auto-filled into the browser form, the agent never sees the raw number. See the **[Integration Guide](./docs/INTEGRATION_GUIDE.md)** for setup instructions and System Prompt templates.
 
 ---
 

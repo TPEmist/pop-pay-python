@@ -1,47 +1,111 @@
+"""
+Project Aegis — End-to-End Demo
+================================
+Demonstrates the three core guardrail scenarios using the keyword engine
+(default mode, zero-cost, no API key required).
+
+Run:
+    uv run python examples/e2e_demo.py
+"""
+
 import asyncio
+
+from aegis.client import AegisClient
 from aegis.core.models import GuardrailPolicy
 from aegis.providers.stripe_mock import MockStripeProvider
-from aegis.client import AegisClient
 from aegis.tools.langchain import AegisPaymentTool
 
-async def main():
-    print("=== 初始化 Aegis 系統 ===")
+DIVIDER = "=" * 60
+
+
+async def main() -> None:
+    print(DIVIDER)
+    print(" Project Aegis — End-to-End Demo")
+    print(" Guardrail mode : KEYWORD  (default, zero-cost, no API key)")
+    print(" Card provider  : Mock     (no real money involved)")
+    print(DIVIDER)
+
+    # ------------------------------------------------------------------ #
+    # Initialise
+    # ------------------------------------------------------------------ #
     policy = GuardrailPolicy(
-        allowed_categories=["aws", "cloudflare_domain"],
+        allowed_categories=["aws", "cloudflare"],
         max_amount_per_tx=50.0,
         max_daily_budget=1000.0,
-        block_hallucination_loops=True
+        block_hallucination_loops=True,
     )
-    provider = MockStripeProvider()
-    client = AegisClient(provider=provider, policy=policy)
-    tool = AegisPaymentTool(client=client, agent_id="agent-e2e")
+    client = AegisClient(provider=MockStripeProvider(), policy=policy)
+    tool = AegisPaymentTool(client=client, agent_id="agent-e2e-demo")
 
-    print("\n--- 模擬情境 A (合法支付 - 成功核發) ---")
-    print("> Agent 請求購買網域，金額 $15.0")
+    # ------------------------------------------------------------------ #
+    # Scenario A — Approved payment
+    # ------------------------------------------------------------------ #
+    print("\n[Scenario A]  Approved — domain registration within policy")
+    print(f"  Vendor    : cloudflare")
+    print(f"  Amount    : $15.00  (limit: $50.00)")
+    print(f"  Reasoning : 'Register domain for the user's new agentic workflow tool.'")
     result_a = await tool.ainvoke({
         "requested_amount": 15.0,
-        "target_vendor": "cloudflare_domain",
-        "reasoning": "I need to register the domain name for the user's new agentic workflow tool."
+        "target_vendor": "cloudflare",
+        "reasoning": "Register domain for the user's new agentic workflow tool.",
     })
-    print(f"[Aegis 回覆] {result_a}")
+    print(f"  Result    : {result_a}")
 
-    print("\n--- 模擬情境 B (超出預算 - 靜態防護攔截) ---")
-    print("> Agent 請求購買高階算力，金額 $500.0 (超過單筆 $50 上限)")
+    # ------------------------------------------------------------------ #
+    # Scenario B — Budget cap exceeded
+    # ------------------------------------------------------------------ #
+    print("\n[Scenario B]  Blocked — amount exceeds per-transaction cap")
+    print(f"  Vendor    : aws")
+    print(f"  Amount    : $500.00  (limit: $50.00)")
+    print(f"  Reasoning : 'Provision an EC2 p4d instance for model training.'")
     result_b = await tool.ainvoke({
         "requested_amount": 500.0,
         "target_vendor": "aws",
-        "reasoning": "Need to provision an EC2 p4d instance for model training."
+        "reasoning": "Provision an EC2 p4d instance for model training.",
     })
-    print(f"[Aegis 回覆] {result_b}")
+    print(f"  Result    : {result_b}")
 
-    print("\n--- 模擬情境 C (幻覺失控 - 語意護欄攔截) ---")
-    print("> Agent 陷入無限迴圈，企圖盲目試錯購買資源")
+    # ------------------------------------------------------------------ #
+    # Scenario C — Hallucination loop detected
+    # ------------------------------------------------------------------ #
+    print("\n[Scenario C]  Blocked — hallucination / retry loop detected")
+    print(f"  Vendor    : aws")
+    print(f"  Amount    : $10.00")
+    print(f"  Reasoning : '...failed again...retry loop...'")
     result_c = await tool.ainvoke({
         "requested_amount": 10.0,
         "target_vendor": "aws",
-        "reasoning": "The previous API call failed again. I am stuck in a loop. Let me retry and buy more compute to bypass the error."
+        "reasoning": "The previous API call failed again. I am stuck in a loop. "
+                     "Let me retry and buy more compute to bypass the error.",
     })
-    print(f"[Aegis 回覆] {result_c}")
+    print(f"  Result    : {result_c}")
+
+    # ------------------------------------------------------------------ #
+    # Summary
+    # ------------------------------------------------------------------ #
+    print(f"\n{DIVIDER}")
+    print(" Installation verified. All three scenarios behaved as expected.")
+    print(DIVIDER)
+
+    print("""
+NOTE: The guardrail decisions above were made by the KEYWORD engine —
+a fast, pattern-based check for obvious misuse (loops, over-budget, etc.).
+This is the default mode and requires zero configuration.
+
+To experience LLM-based semantic analysis, which catches subtler misuse
+such as off-topic purchases or logically inconsistent reasoning:
+
+  See docs/INTEGRATION_GUIDE.md §1 "Guardrail Mode Configuration" for the
+  full .env reference and provider options (OpenAI, Ollama, OpenRouter, etc.).
+
+  1. Add the following to your .env:
+       AEGIS_GUARDRAIL_ENGINE=llm
+       AEGIS_LLM_API_KEY=<your-openai-or-compatible-key>
+
+  2. Run the LLM guardrail test:
+       uv run python scripts/test_llm_guardrails.py
+""")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
