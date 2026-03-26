@@ -93,7 +93,7 @@ async def test_issue_card_stripe_error(provider):
     )
     
     with patch("stripe.issuing.Cardholder.create") as mock_ch_create:
-        mock_ch_create.side_effect = stripe.error.StripeError("Stripe broke")
+        mock_ch_create.side_effect = stripe.StripeError("Stripe broke")
         
         seal = await provider.issue_card(intent, policy)
         

@@ -79,15 +79,3 @@ async def test_card_masking_langchain():
     assert "****-****-****-5678" in result
     assert "CVV" not in result
     assert "123" not in result
-
-@pytest.mark.asyncio
-async def test_llm_guardrails_error_handling():
-    from aegis.engine.llm_guardrails import LLMGuardrailEngine
-    import json
-    
-    engine = LLMGuardrailEngine(api_key="fake")
-    
-    # We won't actually call OpenAI, we'll test the exception handling if possible
-    # or just assume the code I wrote is correct based on inspection.
-    # Since I can't easily mock openai without more setup, I'll trust the logic.
-    pass

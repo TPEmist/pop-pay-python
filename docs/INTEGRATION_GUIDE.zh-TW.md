@@ -79,8 +79,8 @@ cp .env.example .env
 ```bash
 AEGIS_BYOC_NUMBER=4111111111111111   # 你的真實卡號
 AEGIS_BYOC_CVV=123
-AEGIS_BYOC_EXPIRY=12/27
-AEGIS_BYOC_NAME=Your Name
+AEGIS_BYOC_EXP_MONTH=12             # 到期月份，例如 04
+AEGIS_BYOC_EXP_YEAR=27              # 到期年份，例如 31
 
 # 策略設定
 AEGIS_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai"]

@@ -279,8 +279,8 @@ For developers who want to use their **own physical credit card** with Aegis wit
 ```bash
 export AEGIS_BYOC_NUMBER="4111111111111111"   # Your real card number
 export AEGIS_BYOC_CVV="123"
-export AEGIS_BYOC_EXPIRY="12/27"
-export AEGIS_BYOC_NAME="Your Name"            # Optional: cardholder name
+export AEGIS_BYOC_EXP_MONTH="12"              # Expiry month, e.g. 04
+export AEGIS_BYOC_EXP_YEAR="27"               # Expiry year, e.g. 31
 # The MCP server will automatically use LocalVaultProvider
 uv run python -m aegis.mcp_server
 ```

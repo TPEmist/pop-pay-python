@@ -7,9 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-25
+
+### Fixed
+- **BYOC env vars**: Corrected docs (`AEGIS_BYOC_EXPIRY` → `AEGIS_BYOC_EXP_MONTH` + `AEGIS_BYOC_EXP_YEAR`) to match actual code in `byoc_local.py`. Removed undocumented `AEGIS_BYOC_NAME` from all docs.
+- **Stripe SDK compatibility**: `test_stripe_real.py` now uses `stripe.StripeError` instead of the removed `stripe.error.StripeError` path (stripe SDK v6+).
+- **Null guard on card_number**: `mcp_server.py` no longer crashes with `TypeError` when `seal.card_number` is `None`.
+- **StripeIssuingProvider async safety**: Blocking `stripe.issuing.*` calls are now wrapped in `asyncio.to_thread()` to avoid blocking the event loop.
+- **StripeIssuingProvider Cardholder deduplication**: Cardholder ID is now cached per-instance; no longer creates a new Cardholder on every `issue_card` call.
+
+### Added
+- **`aegis.__version__`**: Package version is now accessible via `import aegis; aegis.__version__`.
+
+### Removed
+- **No-op test**: Removed `test_llm_guardrails_error_handling` which contained only `pass` and tested nothing.
+- **`AEGIS_UNMASK_CARDS` CHANGELOG entry**: This feature was announced prematurely in v0.3.7 but never implemented. It has been removed from the changelog as it would expose real card numbers to the LLM context in BYOC mode — violating the core security design of Aegis.
+
 ## [0.3.7] - 2026-03-25
 ### Added
-- **Developer Tools**: Added `AEGIS_UNMASK_CARDS` environment variable to optionally disable card masking (e.g., `****` default) during local testing and E2E validation.
 - **`page_url` parameter for `request_virtual_card`**: Optional parameter that lets the agent pass the current checkout URL. If the CDP browser has no open tabs (e.g., Chrome was restarted mid-session), Aegis auto-opens the URL before injecting. Eliminates the need for manual tab management.
 - **`AegisBrowserInjector._find_best_page`**: Searches all browser contexts (not just `contexts[0]`) for a checkout page, preferring URLs containing payment/checkout keywords. Fixes injection failures when Playwright MCP creates pages in a non-default context.
 - **`AegisBrowserInjector._open_url_in_browser`**: Opens a URL as a new tab in the CDP browser and waits for the payment form JS to initialise. Used by the `page_url` auto-bridge path.

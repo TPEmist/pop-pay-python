@@ -101,7 +101,8 @@ async def request_virtual_card(
     if seal.status.lower() == "rejected":
         return f"Payment rejected by guardrails. Reason: {seal.rejection_reason}"
 
-    masked_card = f"****-****-****-{seal.card_number[-4:]}"
+    last4 = seal.card_number[-4:] if seal.card_number else "????"
+    masked_card = f"****-****-****-{last4}"
 
     # -------------------------------------------------------------------
     # Auto-injection path: if enabled, inject into the active browser tab

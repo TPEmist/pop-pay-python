@@ -1,3 +1,4 @@
+import asyncio
 import stripe
 from aegis.providers.base import VirtualCardProvider
 from aegis.core.models import PaymentIntent, GuardrailPolicy, VirtualSeal
@@ -6,6 +7,7 @@ import uuid
 class StripeIssuingProvider(VirtualCardProvider):
     def __init__(self, api_key: str):
         stripe.api_key = api_key
+        self._cardholder_id: str | None = None
 
     async def issue_card(self, intent: PaymentIntent, policy: GuardrailPolicy) -> VirtualSeal:
         try:
@@ -17,24 +19,28 @@ class StripeIssuingProvider(VirtualCardProvider):
                     rejection_reason="Amount exceeds policy limit"
                 )
 
-            # Create a Cardholder first as required
-            cardholder = stripe.issuing.Cardholder.create(
-                type='individual',
-                name='Aegis Agent',
-                billing={
-                    'address': {
-                        'line1': '123 AI St',
-                        'city': 'San Francisco',
-                        'state': 'CA',
-                        'postal_code': '94105',
-                        'country': 'US'
+            # Create a Cardholder first as required (cached per instance)
+            if self._cardholder_id is None:
+                cardholder = await asyncio.to_thread(
+                    stripe.issuing.Cardholder.create,
+                    type='individual',
+                    name='Aegis Agent',
+                    billing={
+                        'address': {
+                            'line1': '123 AI St',
+                            'city': 'San Francisco',
+                            'state': 'CA',
+                            'postal_code': '94105',
+                            'country': 'US'
+                        }
                     }
-                }
-            )
+                )
+                self._cardholder_id = cardholder.id
 
-            # Create the virtual card using the cardholder.id
-            card = stripe.issuing.Card.create(
-                cardholder=cardholder.id,
+            # Create the virtual card using the cached cardholder id
+            card = await asyncio.to_thread(
+                stripe.issuing.Card.create,
+                cardholder=self._cardholder_id,
                 type='virtual',
                 currency='usd',
                 spending_controls={

@@ -79,8 +79,8 @@ Edit `.env` and set at minimum:
 ```bash
 AEGIS_BYOC_NUMBER=4111111111111111   # Your real card number
 AEGIS_BYOC_CVV=123
-AEGIS_BYOC_EXPIRY=12/27
-AEGIS_BYOC_NAME=Your Name
+AEGIS_BYOC_EXP_MONTH=12             # Expiry month, e.g. 04
+AEGIS_BYOC_EXP_YEAR=27              # Expiry year, e.g. 31
 
 # Policy settings
 AEGIS_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai"]
