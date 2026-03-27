@@ -110,16 +110,11 @@ pip install pop-pay[all]
 ### 步驟一：安裝並啟動 MCP Server
 
 ```bash
-# 複製儲存庫
-git clone https://github.com/TPEmist/Point-One-Percent.git
-cd Point-One-Percent
-
-# 安裝依賴
-uv sync --all-extras
-
-# 啟動 MCP server
-uv run python -m pop_pay.mcp_server
+pip install pop-pay[mcp]
+python -m pop_pay.mcp_server
 ```
+
+> **貢獻者 / 本地開發？** 請參閱 [CONTRIBUTING.md](./CONTRIBUTING.md) 的 `git clone` + `uv sync` 流程。
 
 ### 步驟二：連接你的 Agent
 
@@ -131,7 +126,7 @@ uv run python -m pop_pay.mcp_server
 | **Python 腳本 / gemini-cli** | [整合指南 §2](./docs/INTEGRATION_GUIDE.zh-TW.md#2-gemini-cli--python-腳本整合) |
 | **Playwright / browser-use / Skyvern** | [整合指南 §3](./docs/INTEGRATION_GUIDE.zh-TW.md#3-瀏覽器-agent-中間層playwright--browser-use--skyvern) |
 | **OpenClaw / NemoClaw** | [整合指南 §4](./docs/INTEGRATION_GUIDE.zh-TW.md#4-openclaw--nemoclaw--system-prompt-設定) |
-| **OpenHands** | 將 `uv run python -m pop_pay.mcp_server` 加入你的 `mcpServers` 設定 |
+| **OpenHands** | 將 `python -m pop_pay.mcp_server` 加入你的 `mcpServers` 設定 |
 
 ### 步驟三：設定你的安全策略（環境變數）
 
