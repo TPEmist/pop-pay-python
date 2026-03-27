@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-03-26
+
+### Changed
+- **Product vision clarified**: Point One Percent is an autonomous payment layer — human-defined policy replaces per-transaction approval. Updated README, CONTRIBUTING, and Integration Guide to reflect this.
+- **README workflow**: POP injects credentials via CDP; agent clicks submit (no card exposure); agent receives transaction confirmation only, no masked card number.
+- **README "does NOT" list**: Removed "Fill out forms or click Submit" — POP's CDP injection *does* handle form filling.
+- **CONTRIBUTING**: Replaced "Human-in-the-Loop" framing with "fully autonomous, policy-governed payment experience".
+- **Integration Guide (EN + zh-TW)**: All four "Your First Live Test" sections now clarify that `"do not submit"` is for initial testing only; removing it enables fully autonomous payments.
+
 ## [0.5.1] - 2026-03-26
 
 ### Changed

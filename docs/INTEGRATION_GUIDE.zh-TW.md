@@ -188,6 +188,8 @@ Payment rules:
 
 > 請捐款 10 美元給 Wikipedia，網址 https://donate.wikimedia.org。選擇**信用卡**作為付款方式。使用 pop MCP 工具申請虛擬卡。填妥支付資料，但**請勿送出** — 我會確認後再決定是否提交。
 
+> **注意：**「請勿送出」的指令僅供初次測試使用。一旦確認注入流程正常運作，請從 prompt 中移除，即可達到全自動支付模式——在你設定的 policy 範圍內，agent 無需人工介入即可完成完整的付款流程。
+
 **預期流程：** Agent 導航 → 選擇 $10 → 點擊「Donate by credit/debit card」→ 呼叫 `request_virtual_card` → Point One Percent 透過 CDP 注入卡號與帳單資訊 → Agent 等待你確認。
 
 > **如果請求被拒絕，顯示「Vendor not in allowed categories」：** 在 `.env` 的 `POP_ALLOWED_CATEGORIES` 中加入 `donation`，然後開啟新的 Claude Code session 即可（不需重新註冊 MCP — 新 session 會自動重啟 server 並重新讀取 `.env`）。
@@ -317,6 +319,8 @@ uv run python examples/e2e_demo.py
 uv run --extra llm python scripts/test_llm_guardrails.py
 ```
 
+> **注意：**「請勿送出」的指令僅供初次測試使用。一旦確認注入流程正常運作，請從 prompt 中移除，即可達到全自動支付模式——在你設定的 policy 範圍內，agent 無需人工介入即可完成完整的付款流程。
+
 ---
 
 ## 3. 瀏覽器 Agent 中間層（Playwright / browser-use / Skyvern）
@@ -436,6 +440,8 @@ uv run python examples/agent_vault_flow.py
 
 腳本會導航至結帳頁、向 Point One Percent 申請虛擬卡、透過 CDP 注入卡片資訊，並印出遮罩後的卡號 — 原始 PAN 不會出現在任何輸出中。
 
+> **注意：**「請勿送出」的指令僅供初次測試使用。一旦確認注入流程正常運作，請從 prompt 中移除，即可達到全自動支付模式——在你設定的 policy 範圍內，agent 無需人工介入即可完成完整的付款流程。
+
 ### 適用於 browser-use / Skyvern 的調整
 
 如果你使用 `browser-use` 或 Skyvern（以更高層次的視覺推理運作），模式完全相同 — 在送出表單前攔截：
@@ -553,6 +559,8 @@ export POP_LLM_API_KEY=sk-your-openai-api-key
 Agent 設定完上方的 System Prompt 後，試著交派這個任務：
 
 > 請捐款 10 美元給 Wikipedia，網址 https://donate.wikimedia.org。選擇**信用卡**作為付款方式。使用 pop MCP 工具申請虛擬卡。填妥支付資料，但**請勿送出** — 我會確認後再決定是否提交。
+
+> **注意：**「請勿送出」的指令僅供初次測試使用。一旦確認注入流程正常運作，請從 prompt 中移除，即可達到全自動支付模式——在你設定的 policy 範圍內，agent 無需人工介入即可完成完整的付款流程。
 
 如果護欄核准請求並且卡片資訊被注入表單，代表 Point One Percent 的端對端流程運作正常。
 

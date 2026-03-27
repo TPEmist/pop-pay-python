@@ -1,10 +1,10 @@
 # Contributing to Point One Percent (AgentPay)
 
-Thank you for your interest in contributing to Point One Percent! This project aims to provide a secure and manageable payment layer for Agentic AI, ensuring that agents can perform financial transactions within human-defined boundaries.
+Thank you for your interest in contributing to Point One Percent! This project aims to provide an autonomous payment layer for AI agents, where human-defined policy replaces per-transaction approval, ensuring that agents can perform financial transactions fully autonomously within the guardrails and budget limits set by the human operator.
 
 ## Project Architecture
 
-Point One Percent is built on three core pillars that work together to provide a secure "Human-in-the-Loop" payment experience:
+Point One Percent is built on three core pillars that work together to provide a fully autonomous, policy-governed payment experience:
 
 ### The Vault (Visualization & Management)
 The Vault is our local dashboard and state management system.
@@ -23,9 +23,9 @@ Guardrails are the "brains" that decide whether a payment should be approved or 
 - **LLMGuardrailEngine:** A deep semantic analyzer (powered by GPT-4o-mini) that evaluates the agent's reasoning against the requested `GuardrailPolicy`.
 - **GuardrailPolicy:** A set of rules (e.g., `max_amount`, `allowed_vendors`, `purpose_description`) defined by the human user.
 
-### Browser Injector (Secure Fulfillment)
-For agent frameworks evaluating DOMs, Point One Percent securely fulfills authorized payments without leaking the card directly to the LLM.
-- **AegisBrowserInjector**: Connects strictly out-of-band via CDP (`Chrome DevTools Protocol`). Traverses cross-origin iframes (i.e. Stripe Elements) and auto-populates `<input>` elements safely.
+### Browser Injector (Autonomous Fulfillment)
+For agent frameworks evaluating DOMs, Point One Percent autonomously fulfills authorized payments without leaking the card directly to the LLM. Once the policy and guardrails approve a request, the injection and submission happen without any per-transaction human confirmation.
+- **AegisBrowserInjector**: Connects strictly out-of-band via CDP (`Chrome DevTools Protocol`). Traverses cross-origin iframes (i.e. Stripe Elements) and auto-populates `<input>` elements safely. After injection, the agent clicks the submit button — this is a standard browser interaction, not a security concern, since card credentials are never in the agent's context.
 - **Chrome must be launched with `--remote-debugging-port=9222`** before the injector can attach. Use `--user-data-dir` as well if Chrome is already running (required to open a separate CDP-enabled instance).
 - **When using Playwright MCP** (e.g., with Claude Code), configure it with `--cdp-endpoint http://localhost:9222` so that both Playwright MCP and Point One Percent MCP share the same Chrome instance. See [docs/INTEGRATION_GUIDE.md §1](./docs/INTEGRATION_GUIDE.md#1-claude-code--full-setup-with-cdp-injection) for the full setup.
 

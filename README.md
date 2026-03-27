@@ -42,7 +42,6 @@ Modern agentic workflows require two complementary capabilities. Point One Perce
 **Point One Percent does NOT:**
 - Navigate websites or interact with DOM elements
 - Solve CAPTCHAs or bypass bot-detection systems
-- Fill out forms or click "Submit" on behalf of the agent
 
 That's the browser agent's job.
 
@@ -59,15 +58,19 @@ The real power emerges when Point One Percent is paired with a browser automatio
         │
         │  (Point One Percent evaluates: budget OK? vendor approved? no hallucination?)
         ▼
-3. [POP]  Issues a one-time virtual card (Stripe mode) or mock card (dev mode)
-            Returns masked card number to agent. Full card injected only via
-            trusted local execution environment — never into the LLM's context.
+3. [POP]  Issues a one-time virtual card (Stripe mode) or mock card (dev mode).
+            Full card credentials handled only by the local trusted process —
+            never exposed to the agent or LLM context.
         │
         ▼
-4. [Browser Agent]  Uses the approved credentials to complete the checkout form.
+4. [POP]  Injects real credentials into the checkout form via CDP.
+            The agent receives only a transaction confirmation — no card details.
         │
         ▼
-5. [The Vault]  Dashboard logs the transaction. Card is immediately burned.
+5. [Browser Agent]  Clicks the submit button to complete the transaction.
+        │
+        ▼
+6. [The Vault]  Dashboard logs the transaction. Card is immediately burned.
 ```
 
 ### Supported Integrations

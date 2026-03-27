@@ -188,6 +188,8 @@ Once both MCPs are connected, paste this into a new Claude Code conversation:
 
 > Please donate $10 to Wikipedia at https://donate.wikimedia.org. Select **credit card** as the payment method. Use the pop MCP tool to request a virtual card. Fill in the payment details, but **do not submit** — I will review and confirm before proceeding.
 
+> **Note:** The `"do not submit"` instruction is for initial testing only. Once you have verified the injection flow works correctly, remove it from your prompt to enable fully autonomous payments within your configured policy limits.
+
 **Expected flow:** Agent navigates → selects $10 → clicks "Donate by credit/debit card" → calls `request_virtual_card` → Point One Percent injects card + billing details via CDP → agent waits for your confirmation.
 
 > **If the request is rejected with "Vendor not in allowed categories":** Add `donation` to `POP_ALLOWED_CATEGORIES` in your `.env`, then start a new Claude Code session (no need to re-register the MCP — a new session restarts the server and reloads `.env` automatically).
@@ -317,6 +319,8 @@ You should see three scenarios run: an approved payment, a budget-exceeded rejec
 uv run --extra llm python scripts/test_llm_guardrails.py
 ```
 
+> **Note:** The `"do not submit"` instruction is for initial testing only. Once you have verified the injection flow works correctly, remove it from your prompt to enable fully autonomous payments within your configured policy limits.
+
 ---
 
 ## 3. Browser Agent Middleware (Playwright / browser-use / Skyvern)
@@ -436,6 +440,8 @@ uv run python examples/agent_vault_flow.py
 
 The script navigates to the checkout, requests a virtual card from Point One Percent, injects the card details via CDP, and prints the masked card number — the raw PAN never appears in the output.
 
+> **Note:** The `"do not submit"` instruction is for initial testing only. Once you have verified the injection flow works correctly, remove it from your prompt to enable fully autonomous payments within your configured policy limits.
+
 ### Adapting for browser-use / Skyvern
 
 If you're using `browser-use` or Skyvern (which operate with higher-level visual reasoning), the pattern is identical — intercept before form submission:
@@ -553,6 +559,8 @@ export POP_LLM_API_KEY=sk-your-openai-api-key
 Once your agent is configured with the system prompt above, try this task:
 
 > Please donate $10 to Wikipedia at https://donate.wikimedia.org. Select **credit card** as the payment method. Use the pop MCP tool to request a virtual card. Fill in the payment details, but **do not submit** — I will review and confirm before proceeding.
+
+> **Note:** The `"do not submit"` instruction is for initial testing only. Once you have verified the injection flow works correctly, remove it from your prompt to enable fully autonomous payments within your configured policy limits.
 
 If the guardrails approve the request and the card details are injected into the form, Point One Percent is working correctly end-to-end.
 
