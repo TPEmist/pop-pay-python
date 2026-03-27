@@ -1,5 +1,3 @@
-[English](./INTEGRATION_GUIDE.md) | [中文](./INTEGRATION_GUIDE.zh-TW.md)
-
 # Point One Percent Integration Guide
 
 > **For developers** who want to embed Point One Percent as the financial middleware in their agentic workflows.

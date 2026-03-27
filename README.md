@@ -1,5 +1,3 @@
-[English](./README.md) | [Chinese](./README.zh-TW.md)
-
 <p align="center">
     <picture>
         <img src="https://raw.githubusercontent.com/TPEmist/Point-One-Percent/main/project_banner.png" alt="Point One Percent (AgentPay)" width="800">
