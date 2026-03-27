@@ -472,9 +472,9 @@ class POPCheckoutInterceptor:
 
 ---
 
-## 4. OpenClaw / NemoClaw — System Prompt Configuration
+## 4. OpenClaw / NemoClaw — Full Setup
 
-The most important guardrail you can add is at the **System Prompt level**: instructing the agent that it *must* call Point One Percent before any payment action, rather than attempting to fill forms directly with real credentials.
+Both OpenClaw and NemoClaw support MCP natively and use Chrome DevTools Protocol (CDP) for browser automation — making the integration with Point One Percent nearly identical to the Claude Code setup in §1.
 
 ### Recommended System Prompt Fragment
 
@@ -496,61 +496,128 @@ You are operating under the Point One Percent Payment Guardrail Protocol. The fo
 
 4. **If you find yourself in a loop** (retrying the same failed purchase more than once),
    you MUST stop and request human intervention rather than continuing.
-
-5. The card number returned by Point One Percent will be masked (e.g., `****-****-****-4242`).
-   Do NOT attempt to look up or reconstruct the full card number.
 ```
 
-### OpenClaw: Registering Point One Percent as an MCP Tool
+---
+
+### OpenClaw Setup
+
+OpenClaw has full native MCP support and reads `.env` files in the same way as Claude Code. The setup is nearly identical to §1.
+
+**Step 0 — Launch Chrome with CDP**
+
+Same as §1 — use `pop-launch`:
 
 ```bash
-openclaw mcp add pop -- uv run python -m pop_pay.mcp_server
+pop-launch --print-mcp
 ```
 
-Or add to `~/.openclaw/mcp_servers.json`:
+**Step 1 — Configure `.env`**
+
+Same as §1. OpenClaw reads from `.env` in the project directory, `~/.openclaw/.env`, or via the `env` block in `~/.openclaw/openclaw.json`. Copy and fill in your credentials:
+
+```bash
+cp .env.example .env
+```
+
+**Step 2 — Register Point One Percent MCP**
+
+```bash
+openclaw mcp add pop -- uv run --project /path/to/Point-One-Percent python -m pop_pay.mcp_server
+```
+
+Or add directly to `~/.openclaw/mcp_servers.json`:
 
 ```json
 {
   "pop": {
     "command": "uv",
-    "args": ["run", "python", "-m", "pop_pay.mcp_server"],
-    "cwd": "/path/to/Point-One-Percent",
-    "env": {
-      "POP_ALLOWED_CATEGORIES": "[\"aws\", \"cloudflare\", \"openai\", \"github\"]",
-      "POP_MAX_PER_TX": "100.0",
-      "POP_MAX_DAILY": "500.0",
-      "POP_BLOCK_LOOPS": "true",
-      "POP_GUARDRAIL_ENGINE": "llm",
-      "POP_LLM_API_KEY": "sk-your-openai-api-key"
-    }
+    "args": ["run", "--project", "/path/to/Point-One-Percent", "python", "-m", "pop_pay.mcp_server"]
   }
 }
 ```
 
-### NemoClaw (NVIDIA Sandboxed): Additional Notes
+**Step 3 — Register Playwright MCP with CDP endpoint**
 
-NemoClaw's `OpenShell` runtime restricts write access to `/sandbox/` and `/tmp/`.
+OpenClaw supports Playwright MCP via ClawHub. Register it with the same `--cdp-endpoint` flag so both MCPs share the same Chrome instance:
 
 ```bash
-# Step 1: Clone Point One Percent inside the sandbox
+openclaw mcp add playwright -- npx @playwright/mcp@latest --cdp-endpoint http://localhost:9222
+```
+
+> After updating `.env`, restart your OpenClaw session to reload config — no need to re-register MCPs.
+
+---
+
+### NemoClaw (NVIDIA OpenShell) Setup
+
+NemoClaw wraps OpenClaw inside the **OpenShell** security sandbox. The key differences from Claude Code / OpenClaw are:
+
+1. **No `.env` files** — credentials are declared as "Providers" in the YAML policy file and injected as environment variables at runtime.
+2. **Zero-egress by default** — the POP MCP server endpoint must be explicitly added to the network allowlist.
+3. **Early preview** — interfaces may change; check the [NemoClaw docs](https://docs.nvidia.com/nemoclaw/latest/) for the latest.
+
+**Step 0 — Launch Chrome with CDP (outside the sandbox)**
+
+Run `pop-launch` on the host before connecting to the sandbox:
+
+```bash
+pop-launch
+```
+
+**Step 1 — Clone and install inside the sandbox**
+
+```bash
 nemoclaw my-assistant connect
 cd /sandbox
 git clone https://github.com/TPEmist/Point-One-Percent.git
 cd Point-One-Percent && uv sync --all-extras
-
-# Step 2: Register MCP server (while connected to sandbox)
-openclaw mcp add pop -- uv run python -m pop_pay.mcp_server
-
-# Step 3: Set env vars (pop_state.db will write to /sandbox/Point-One-Percent/)
-export POP_ALLOWED_CATEGORIES='["aws", "openai"]'
-export POP_MAX_PER_TX=50.0
-export POP_MAX_DAILY=200.0
-# Guardrail mode: "keyword" (default) or "llm" — see §1 "Guardrail Mode Configuration" for options
-export POP_GUARDRAIL_ENGINE=llm
-export POP_LLM_API_KEY=sk-your-openai-api-key
 ```
 
-> **NemoClaw tip:** The System Prompt fragment above is particularly critical in the NemoClaw context, since the agent has broader system-level permissions. Point One Percent becomes the last financial line of defense inside the sandbox.
+**Step 2 — Declare POP credentials as Providers in your policy YAML**
+
+In your `nemoclaw-blueprint/policies/openclaw-sandbox.yaml`, add POP credentials under the `providers` section:
+
+```yaml
+providers:
+  - name: POP_BYOC_NUMBER
+    value: "4111111111111111"
+  - name: POP_BYOC_CVV
+    value: "123"
+  - name: POP_BYOC_EXP_MONTH
+    value: "12"
+  - name: POP_BYOC_EXP_YEAR
+    value: "27"
+  - name: POP_ALLOWED_CATEGORIES
+    value: '["aws", "openai", "donation"]'
+  - name: POP_MAX_PER_TX
+    value: "100.0"
+  - name: POP_MAX_DAILY
+    value: "500.0"
+  - name: POP_BLOCK_LOOPS
+    value: "true"
+```
+
+**Step 3 — Allowlist the POP MCP server in network policy**
+
+```yaml
+network:
+  egress:
+    allow:
+      - host: localhost
+        port: 9222   # Chrome CDP
+      - host: localhost
+        port: 8000   # POP MCP server (adjust if different)
+```
+
+**Step 4 — Register MCPs (while connected to sandbox)**
+
+```bash
+openclaw mcp add pop -- uv run python -m pop_pay.mcp_server
+openclaw mcp add playwright -- npx @playwright/mcp@latest --cdp-endpoint http://localhost:9222
+```
+
+> **NemoClaw tip:** Point One Percent's guardrails are especially valuable inside NemoClaw — the zero-egress sandbox prevents most accidental spending, but POP adds semantic policy enforcement and a full audit trail that OpenShell alone does not provide.
 
 ### Your First Live Test
 
@@ -572,7 +639,7 @@ If the guardrails approve the request and the card details are injected into the
 - [§1 Claude Code](#1-claude-code--full-setup-with-cdp-injection) — Full BYOC + CDP injection setup (most common)
 - [§2 Python SDK / gemini-cli](#2-gemini-cli--python-script-integration) — Direct SDK embedding and LangChain tool pattern
 - [§3 Browser Agents](#3-browser-agent-middleware-playwright--browser-use--skyvern) — Playwright / browser-use / Skyvern integration
-- [§4 OpenClaw / NemoClaw](#4-openclaw--nemoclaw--system-prompt-configuration) — System prompt configuration for OpenClaw and NemoClaw
+- [§4 OpenClaw / NemoClaw](#4-openclaw--nemoclaw--full-setup) — Full MCP + CDP setup for OpenClaw and NemoClaw
 - [examples/agent_vault_flow.py](../examples/agent_vault_flow.py) — Full Playwright browser injection example
 - [examples/e2e_demo.py](../examples/e2e_demo.py) — SDK-only end-to-end demo (no browser)
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — How to add new payment providers or guardrail engines
