@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-03-27
+
+### Changed
+- **README Quick Start**: Replaced `git clone` + `uv sync` path with `pip install pop-pay[mcp]` + `python -m pop_pay.mcp_server`. Git clone path moved to CONTRIBUTING.md (development only). `.env` is read from the current working directory — no source code needed.
+
 ## [0.5.3] - 2026-03-26
 
 ### Changed

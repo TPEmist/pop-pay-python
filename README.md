@@ -108,16 +108,11 @@ If you're using OpenClaw, NemoClaw, Claude Code, OpenHands, or any MCP-compatibl
 ### Step 1: Install & Start MCP Server
 
 ```bash
-# Clone the repo
-git clone https://github.com/TPEmist/Point-One-Percent.git
-cd Point-One-Percent
-
-# Install dependencies
-uv sync --all-extras
-
-# Start the MCP server
-uv run python -m pop_pay.mcp_server
+pip install pop-pay[mcp]
+python -m pop_pay.mcp_server
 ```
+
+> **Contributing / local development?** See [CONTRIBUTING.md](./CONTRIBUTING.md) for the `git clone` + `uv sync` path.
 
 ### Step 2: Connect to Your Agent
 
@@ -129,7 +124,7 @@ Choose your platform and follow the dedicated setup guide:
 | **Python script / gemini-cli** | [Integration Guide §2](./docs/INTEGRATION_GUIDE.md#2-gemini-cli--python-script-integration) |
 | **Playwright / browser-use / Skyvern** | [Integration Guide §3](./docs/INTEGRATION_GUIDE.md#3-browser-agent-middleware-playwright--browser-use--skyvern) |
 | **OpenClaw / NemoClaw** | [Integration Guide §4](./docs/INTEGRATION_GUIDE.md#4-openclaw--nemoclaw--system-prompt-configuration) |
-| **OpenHands** | Add `uv run python -m pop_pay.mcp_server` to your `mcpServers` config |
+| **OpenHands** | Add `python -m pop_pay.mcp_server` to your `mcpServers` config |
 
 ### Step 3: Configure Your Policy (Environment Variables)
 
