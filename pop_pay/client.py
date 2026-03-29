@@ -2,13 +2,13 @@ import uuid
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy, VirtualSeal
 from pop_pay.providers.base import VirtualCardProvider
 from pop_pay.engine.guardrails import GuardrailEngine
-from pop_pay.core.state import AegisStateTracker
+from pop_pay.core.state import PopStateTracker
 
-class AegisClient:
+class PopClient:
     def __init__(self, provider: VirtualCardProvider, policy: GuardrailPolicy, engine: GuardrailEngine = None, db_path: str = "pop_state.db"):
         self.provider = provider
         self.policy = policy
-        self.state_tracker = AegisStateTracker(db_path=db_path)
+        self.state_tracker = PopStateTracker(db_path=db_path)
         self.engine = engine if engine is not None else GuardrailEngine()
         
     async def process_payment(self, intent: PaymentIntent) -> VirtualSeal:

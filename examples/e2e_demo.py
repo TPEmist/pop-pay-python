@@ -10,10 +10,10 @@ Run:
 
 import asyncio
 
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 from pop_pay.core.models import GuardrailPolicy
 from pop_pay.providers.stripe_mock import MockStripeProvider
-from pop_pay.tools.langchain import AegisPaymentTool
+from pop_pay.tools.langchain import PopPaymentTool
 
 DIVIDER = "=" * 60
 
@@ -34,8 +34,8 @@ async def main() -> None:
         max_daily_budget=1000.0,
         block_hallucination_loops=True,
     )
-    client = AegisClient(provider=MockStripeProvider(), policy=policy)
-    tool = AegisPaymentTool(client=client, agent_id="agent-e2e-demo")
+    client = PopClient(provider=MockStripeProvider(), policy=policy)
+    tool = PopPaymentTool(client=client, agent_id="agent-e2e-demo")
 
     # ------------------------------------------------------------------ #
     # Scenario A — Approved payment

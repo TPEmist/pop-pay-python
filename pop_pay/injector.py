@@ -1,5 +1,5 @@
 """
-AegisBrowserInjector: CDP-based browser injector with iframe traversal.
+PopBrowserInjector: CDP-based browser injector with iframe traversal.
 
 Connects to an already-running Chromium browser (via --remote-debugging-port)
 and auto-fills credit card fields on the active page — including fields inside
@@ -16,7 +16,7 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
-from pop_pay.core.state import AegisStateTracker
+from pop_pay.core.state import PopStateTracker
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ EMAIL_SELECTORS = [
 ]
 
 
-class AegisBrowserInjector:
+class PopBrowserInjector:
     """
     Attaches to a running Chromium browser via CDP and injects
     card credentials into whatever page is currently active.
@@ -162,11 +162,11 @@ class AegisBrowserInjector:
         chromium --remote-debugging-port=9222 https://checkout.example.com
 
     Usage:
-        injector = AegisBrowserInjector(state_tracker)
+        injector = PopBrowserInjector(state_tracker)
         success = await injector.inject_payment_info(seal_id)
     """
 
-    def __init__(self, state_tracker: AegisStateTracker):
+    def __init__(self, state_tracker: PopStateTracker):
         self.state_tracker = state_tracker
 
     # ------------------------------------------------------------------
@@ -187,7 +187,7 @@ class AegisBrowserInjector:
         in the main page frame, if the env vars are set.
 
         Args:
-            seal_id:  The VirtualSeal ID returned by AegisClient.process_payment().
+            seal_id:  The VirtualSeal ID returned by PopClient.process_payment().
             cdp_url:  The Chrome DevTools Protocol endpoint (default: http://localhost:9222).
             page_url: Optional. The checkout page URL currently open in the agent's browser.
                       If provided and the CDP browser has no open pages, Aegis will
@@ -214,7 +214,7 @@ class AegisBrowserInjector:
 
         details = self.state_tracker.get_seal_details(seal_id)
         if not details:
-            logger.error("AegisBrowserInjector: seal_id '%s' not found in DB.", seal_id)
+            logger.error("PopBrowserInjector: seal_id '%s' not found in DB.", seal_id)
             return result
 
         card_number: str = details.get("card_number", "")
@@ -245,14 +245,14 @@ class AegisBrowserInjector:
                     # Auto-bridge: agent navigated via a different browser instance;
                     # open the same URL in the CDP browser so injection can proceed.
                     logger.info(
-                        "AegisBrowserInjector: no open pages in CDP browser — "
+                        "PopBrowserInjector: no open pages in CDP browser — "
                         "opening page_url: %s", page_url,
                     )
                     page = await self._open_url_in_browser(browser, page_url)
 
                 if page is None:
                     logger.warning(
-                        "AegisBrowserInjector: no open pages found via CDP at %s. "
+                        "PopBrowserInjector: no open pages found via CDP at %s. "
                         "Ensure pop-launch is running and Playwright MCP is configured "
                         "with --cdp-endpoint %s, or pass page_url to request_virtual_card.",
                         cdp_url, cdp_url,
@@ -273,7 +273,7 @@ class AegisBrowserInjector:
                 return result
 
         except Exception as exc:
-            logger.error("AegisBrowserInjector error: %s", exc, exc_info=True)
+            logger.error("PopBrowserInjector error: %s", exc, exc_info=True)
             return result
         finally:
             # Disconnect the playwright session — does NOT close the real browser
@@ -316,19 +316,19 @@ class AegisBrowserInjector:
         try:
             contexts = browser.contexts
             if not contexts:
-                logger.warning("AegisBrowserInjector: no contexts available to open URL.")
+                logger.warning("PopBrowserInjector: no contexts available to open URL.")
                 return None
             page = await contexts[0].new_page()
             await page.goto(url, wait_until="domcontentloaded", timeout=15000)
             # Allow dynamic payment form JS (e.g. Gr4vy, Stripe) to initialise
             await page.wait_for_timeout(3000)
             logger.info(
-                "AegisBrowserInjector: auto-bridge opened URL in CDP browser: %s", url
+                "PopBrowserInjector: auto-bridge opened URL in CDP browser: %s", url
             )
             return page
         except Exception as exc:
             logger.error(
-                "AegisBrowserInjector: failed to open URL '%s': %s", url, exc
+                "PopBrowserInjector: failed to open URL '%s': %s", url, exc
             )
             return None
 
@@ -371,18 +371,18 @@ class AegisBrowserInjector:
 
         await card_locator.fill(card_number)
         logger.info(
-            "AegisBrowserInjector: ✅ card number injected in frame '%s'", frame.url
+            "PopBrowserInjector: ✅ card number injected in frame '%s'", frame.url
         )
 
         expiry_locator = await self._find_visible_locator(frame, EXPIRY_SELECTORS)
         if expiry_locator:
             await expiry_locator.fill(expiry)
-            logger.info("AegisBrowserInjector: expiry injected.")
+            logger.info("PopBrowserInjector: expiry injected.")
 
         cvv_locator = await self._find_visible_locator(frame, CVV_SELECTORS)
         if cvv_locator:
             await cvv_locator.fill(cvv)
-            logger.info("AegisBrowserInjector: CVV injected.")
+            logger.info("PopBrowserInjector: CVV injected.")
 
         return True
 
@@ -409,10 +409,10 @@ class AegisBrowserInjector:
             if locator:
                 try:
                     await locator.fill(first_name)
-                    logger.info("AegisBrowserInjector: first name injected.")
+                    logger.info("PopBrowserInjector: first name injected.")
                     any_filled = True
                 except Exception as exc:
-                    logger.debug("AegisBrowserInjector: could not fill first name: %s", exc)
+                    logger.debug("PopBrowserInjector: could not fill first name: %s", exc)
 
         # Last name
         if last_name:
@@ -420,10 +420,10 @@ class AegisBrowserInjector:
             if locator:
                 try:
                     await locator.fill(last_name)
-                    logger.info("AegisBrowserInjector: last name injected.")
+                    logger.info("PopBrowserInjector: last name injected.")
                     any_filled = True
                 except Exception as exc:
-                    logger.debug("AegisBrowserInjector: could not fill last name: %s", exc)
+                    logger.debug("PopBrowserInjector: could not fill last name: %s", exc)
 
         # Full name fallback — only used when first+last name fields are absent
         # but a combined "name" field exists on the page
@@ -434,11 +434,11 @@ class AegisBrowserInjector:
                 if locator:
                     try:
                         await locator.fill(full_name)
-                        logger.info("AegisBrowserInjector: full name injected.")
+                        logger.info("PopBrowserInjector: full name injected.")
                         any_filled = True
                     except Exception as exc:
                         logger.debug(
-                            "AegisBrowserInjector: could not fill full name: %s", exc
+                            "PopBrowserInjector: could not fill full name: %s", exc
                         )
 
         # Street address
@@ -447,11 +447,11 @@ class AegisBrowserInjector:
             if locator:
                 try:
                     await locator.fill(street)
-                    logger.info("AegisBrowserInjector: street address injected.")
+                    logger.info("PopBrowserInjector: street address injected.")
                     any_filled = True
                 except Exception as exc:
                     logger.debug(
-                        "AegisBrowserInjector: could not fill street address: %s", exc
+                        "PopBrowserInjector: could not fill street address: %s", exc
                     )
 
         # Zip / postal code
@@ -460,10 +460,10 @@ class AegisBrowserInjector:
             if locator:
                 try:
                     await locator.fill(zip_code)
-                    logger.info("AegisBrowserInjector: zip code injected.")
+                    logger.info("PopBrowserInjector: zip code injected.")
                     any_filled = True
                 except Exception as exc:
-                    logger.debug("AegisBrowserInjector: could not fill zip code: %s", exc)
+                    logger.debug("PopBrowserInjector: could not fill zip code: %s", exc)
 
         # Email
         if email:
@@ -471,10 +471,10 @@ class AegisBrowserInjector:
             if locator:
                 try:
                     await locator.fill(email)
-                    logger.info("AegisBrowserInjector: email injected.")
+                    logger.info("PopBrowserInjector: email injected.")
                     any_filled = True
                 except Exception as exc:
-                    logger.debug("AegisBrowserInjector: could not fill email: %s", exc)
+                    logger.debug("PopBrowserInjector: could not fill email: %s", exc)
 
         return any_filled
 

@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import date
 
-class AegisStateTracker:
+class PopStateTracker:
     def __init__(self, db_path: str = "pop_state.db"):
         self.db_path = db_path
         # We keep the connection open for the lifetime of the tracker

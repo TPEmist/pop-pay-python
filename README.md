@@ -18,7 +18,7 @@ When Agentic AI encounters a paywall (e.g., domain registration, API credits, co
 Point One Percent is designed with a "Dual Architecture" vision to scale from open-source local experiments to enterprise-grade AI production pipelines.
 
 ### 1. Hacker Edition (BYOC + DOM Injection)
-Built for open-source frameworks like OpenClaw and NemoClaw. The agent **never** receives the true credit card number—it only sees a masked version (\`****-4242\`). When the agent successfully navigates to a checkout paywall, the `AegisBrowserInjector` attaches to the active Chromium browser via the Chrome DevTools Protocol (CDP). It precisely traverses all cross-origin iframes (like Stripe Elements) and injects the real credentials deep into the DOM form elements, delivering **100% protection against prompt injection** or hallucination-driven extractions. Bring Your Own Card (BYOC) locally with absolute peace of mind.
+Built for open-source frameworks like OpenClaw and NemoClaw. The agent **never** receives the true credit card number—it only sees a masked version (\`****-4242\`). When the agent successfully navigates to a checkout paywall, the `PopBrowserInjector` attaches to the active Chromium browser via the Chrome DevTools Protocol (CDP). It precisely traverses all cross-origin iframes (like Stripe Elements) and injects the real credentials deep into the DOM form elements, delivering **100% protection against prompt injection** or hallucination-driven extractions. Bring Your Own Card (BYOC) locally with absolute peace of mind.
 
 ### 2. Enterprise Edition (Stripe Issuing)
 The "North Star" for the broader Agentic SaaS ecosystem. Proving that Point One Percent has the enterprise-grade extensibility required for the real world, it seamlessly connects to verified financial infrastructure. Perfect for platforms building "Agentic Visa" services that programmatically issue real, single-use, burner virtual credit cards (VCCs) via the Stripe API for cloud-hosted AI fleets.
@@ -84,37 +84,90 @@ The real power emerges when Point One Percent is paired with a browser automatio
 
 ## 4. Installation
 
+> **Shell note:** `[...]` is special syntax in zsh and bash — always wrap the package name in quotes.
+
 ```bash
 # Core only (keyword guardrail + mock provider, zero external dependencies)
-pip install pop-pay
+pip install "pop-pay"
+
+# Claude Code / MCP integration
+pip install "pop-pay[mcp]"
+
+# Claude Code + CDP injection (BYOC)
+pip install "pop-pay[mcp,browser]"
 
 # With LLM-based guardrails (supports OpenAI, Ollama, vLLM, OpenRouter)
-pip install pop-pay[llm]
+pip install "pop-pay[mcp,llm]"
 
 # With Stripe virtual card issuing
-pip install pop-pay[stripe]
+pip install "pop-pay[stripe]"
 
 # With LangChain integration
-pip install pop-pay[langchain]
+pip install "pop-pay[langchain]"
 
 # Full installation (all features)
-pip install pop-pay[all]
+pip install "pop-pay[all]"
 ```
 
 ## 5. Quick Start for OpenClaw / NemoClaw / Claude Code / OpenHands
 
 If you're using OpenClaw, NemoClaw, Claude Code, OpenHands, or any MCP-compatible agentic framework, you can get Point One Percent running in under 2 minutes:
 
-### Step 1: Install & Start MCP Server
+### Step 1: Set Up Environment & Install
 
 ```bash
-pip install pop-pay[mcp]
-python -m pop_pay.mcp_server
+# Create a dedicated directory and virtualenv
+mkdir ~/pop-pay && cd ~/pop-pay
+python3 -m venv .venv && source .venv/bin/activate
+
+# Install — quotes required for zsh/bash
+pip install "pop-pay[mcp,browser]"
 ```
 
+> **Mock card only (no injection)?** `pip install "pop-pay[mcp]"` is sufficient — skip the `[browser]` extra.
+> **LLM guardrail mode?** Also install `pip install "pop-pay[mcp,browser,llm]"`.
 > **Contributing / local development?** See [CONTRIBUTING.md](./CONTRIBUTING.md) for the `git clone` + `uv sync` path.
 
-### Step 2: Connect to Your Agent
+### Step 1b: Configure Your `.env`
+
+Create `~/pop-pay/.env` — this is where `pop-pay` reads its configuration from:
+
+```bash
+# ── Payment policy ──
+POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai", "github"]
+POP_MAX_PER_TX=100.0
+POP_MAX_DAILY=500.0
+POP_BLOCK_LOOPS=true
+
+# ── CDP injection (required for BYOC card filling) ──
+POP_AUTO_INJECT=true
+POP_CDP_URL=http://localhost:9222
+
+# ── BYOC: Bring Your Own Card ──
+# POP_BYOC_NUMBER=4111111111111111
+# POP_BYOC_CVV=123
+# POP_BYOC_EXP_MONTH=12
+# POP_BYOC_EXP_YEAR=27
+
+# ── Billing info (for auto-filling billing fields) ──
+# POP_BILLING_FIRST_NAME=Jane
+# POP_BILLING_LAST_NAME=Doe
+# POP_BILLING_EMAIL=jane@example.com
+# POP_BILLING_STREET=123 Main St
+# POP_BILLING_ZIP=10001
+```
+
+> **`.env` location:** `pop-pay` searches for `.env` starting from the venv's parent directory upward. If your venv is at `~/pop-pay/.venv`, place `.env` at `~/pop-pay/.env`.
+
+### Step 2: Launch Chrome & Get MCP Commands
+
+```bash
+pop-launch --print-mcp
+```
+
+This launches Chrome with CDP enabled and prints the exact `claude mcp add` commands to run.
+
+### Step 3: Add to Claude Code
 
 Choose your platform and follow the dedicated setup guide:
 
@@ -126,17 +179,19 @@ Choose your platform and follow the dedicated setup guide:
 | **OpenClaw / NemoClaw** | [Integration Guide §4](./docs/INTEGRATION_GUIDE.md#4-openclaw--nemoclaw--system-prompt-configuration) |
 | **OpenHands** | Add `python -m pop_pay.mcp_server` to your `mcpServers` config |
 
-### Step 3: Configure Your Policy (Environment Variables)
+### Step 4: Configure Policy
 
-```bash
-export POP_ALLOWED_CATEGORIES='["aws", "cloudflare", "openai", "github"]'
-export POP_MAX_PER_TX=100.0        # Max $100 per single transaction
-export POP_MAX_DAILY=500.0         # Max $500 per day total
-export POP_BLOCK_LOOPS=true        # Block hallucination/retry loops
-# Optional: export POP_STRIPE_KEY=sk_live_... (see §8 for Stripe setup)
-```
+Edit `~/pop-pay/.env` (see Step 1b). Key variables:
 
-> **After editing `.env`, restart your agent session** (e.g. close and reopen Claude Code) for the changes to take effect. The MCP server loads configuration once at startup — it does not hot-reload.
+| Variable | Default | Description |
+|---|---|---|
+| `POP_ALLOWED_CATEGORIES` | `["aws","cloudflare"]` | Vendors the agent is allowed to pay |
+| `POP_MAX_PER_TX` | `100.0` | Max $ per transaction |
+| `POP_MAX_DAILY` | `500.0` | Max $ per day |
+| `POP_BLOCK_LOOPS` | `true` | Block hallucination/retry loops |
+| `POP_AUTO_INJECT` | `false` | Enable CDP card injection |
+
+> **After editing `.env`, fully close and reopen Claude Code.** The MCP server loads configuration at startup — `!claude mcp list` alone is not sufficient to pick up `.env` changes.
 
 #### Guardrail Mode: Keyword vs LLM
 
@@ -230,7 +285,7 @@ uv run streamlit run dashboard/app.py
 Integrate Point One Percent into your custom Python or LangChain workflows in just a few lines:
 
 ```python
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 from pop_pay.providers.stripe_mock import MockStripeProvider
 from pop_pay.core.models import GuardrailPolicy
 
@@ -243,15 +298,15 @@ policy = GuardrailPolicy(
 )
 
 # Initialize the client with keyword-only guardrails (default)
-client = AegisClient(
+client = PopClient(
     provider=MockStripeProvider(),
     policy=policy,
     db_path="pop_state.db"
 )
 
 # Use with LangChain Tool
-from pop_pay.tools.langchain import AegisPaymentTool
-tool = AegisPaymentTool(client=client, agent_id="agent-01")
+from pop_pay.tools.langchain import PopPaymentTool
+tool = PopPaymentTool(client=client, agent_id="agent-01")
 ```
 
 > For LLM guardrail engine setup and the full provider reference, see [Integration Guide §2](./docs/INTEGRATION_GUIDE.md#2-gemini-cli--python-script-integration).
@@ -273,15 +328,15 @@ Mock cards are fully functional within the system (budget tracking, burn-after-u
 
 For developers who want to use their **own physical credit card** with Point One Percent without a Stripe account. The `LocalVaultProvider` reads card credentials from environment variables and injects them into browser payment forms via CDP — the raw PAN is never exposed to the agent.
 
-**Set the following environment variables (or copy `.env.example`):**
+**Add to your `~/pop-pay/.env`:**
 ```bash
-export POP_BYOC_NUMBER="4111111111111111"   # Your real card number
-export POP_BYOC_CVV="123"
-export POP_BYOC_EXP_MONTH="12"              # Expiry month, e.g. 04
-export POP_BYOC_EXP_YEAR="27"               # Expiry year, e.g. 31
-# The MCP server will automatically use LocalVaultProvider
-uv run python -m pop_pay.mcp_server
+POP_BYOC_NUMBER=4111111111111111   # Your real card number
+POP_BYOC_CVV=123
+POP_BYOC_EXP_MONTH=12              # Expiry month, e.g. 04
+POP_BYOC_EXP_YEAR=27               # Expiry year, e.g. 31
+POP_AUTO_INJECT=true
 ```
+Then restart Claude Code. The MCP server will automatically use `LocalVaultProvider`.
 
 **Provider priority (high → low):** Stripe Issuing → BYOC Local → Mock.
 
@@ -302,7 +357,7 @@ To issue **real virtual credit cards** through [Stripe Issuing](https://stripe.c
 **Option A: Via Environment Variable (for MCP Server)**
 ```bash
 export POP_STRIPE_KEY=sk_live_your_stripe_key_here
-uv run python -m pop_pay.mcp_server
+python -m pop_pay.mcp_server
 # The MCP server will automatically use StripeIssuingProvider
 ```
 

@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.7] - 2026-03-29
+
+### Changed
+- **Class renames (breaking):** All `Aegis*` class names replaced with `Pop*` to align with the `pop-pay` package name:
+  - `AegisClient` → `PopClient`
+  - `AegisBrowserInjector` → `PopBrowserInjector`
+  - `AegisStateTracker` → `PopStateTracker`
+  - `AegisPaymentInput` → `PopPaymentInput`
+  - `AegisPaymentTool` → `PopPaymentTool`
+- **MCP server name:** `FastMCP("pop-vault")` → `FastMCP("pop-pay")`
+- **README / docs:** Full pip-only quick start — venv setup, `.env` location, quotes requirement, `[mcp,browser]` / `[mcp,llm]` extras, `pop-launch --print-mcp` replaces hardcoded `claude mcp add` commands, session restart requirement documented
+- **README.pypi.md:** Quick Start Step 1 was incorrectly showing `git clone` — now correctly shows `pip install` flow
+- All `uv run python -m pop_pay.mcp_server` → `python -m pop_pay.mcp_server` in user-facing docs
+
+### Added
+- `tests/test_rename_smoke.py`: Smoke tests verifying all renamed classes import and function correctly
+
+## [0.5.6] - 2026-03-28
+
+### Fixed
+- `pop-launch --print-mcp`: call site still passing `project_root` after signature change — removed stale argument.
+
+## [0.5.5] - 2026-03-28
+
+### Fixed
+- `mcp_server.py`: `StripeIssuingProvider` import made lazy — `pip install "pop-pay[mcp]"` no longer crashes with `ModuleNotFoundError: No module named 'stripe'` when the `[stripe]` extra is not installed.
+- `pop-launch --print-mcp`: MCP server command now uses `sys.executable` instead of hardcoded `uv run --project <path>`, making it correct for pip venv installs.
+
 ## [0.5.4] - 2026-03-27
 
 ### Changed

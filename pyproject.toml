@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pop-pay"
-version = "0.5.4"
+version = "0.5.7"
 description = "Point One Percent - Semantic Payment Guardrail for AI Agents. it only takes 0.1% of Hallucination to drain 100% of your wallet."
 authors = [{name="Point One Percent Team"}]
 dynamic = ["readme"]

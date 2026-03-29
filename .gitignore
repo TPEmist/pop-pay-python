@@ -24,3 +24,5 @@ README.pypi.md
 .pytest_cache/
 local_tests/
 v0.4.1_DEV_PLAN.md
+scripts/demo_guardrail.py
+.playwright-mcp/

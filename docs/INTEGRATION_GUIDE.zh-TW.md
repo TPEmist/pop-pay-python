@@ -71,7 +71,7 @@ alias chrome-cdp='google-chrome --remote-debugging-port=9222 --user-data-dir=/tm
 從範例檔複製並填入你的憑證：
 
 ```bash
-cp .env.example .env
+Create ~/pop-pay/.env with your credentials
 ```
 
 編輯 `.env`，至少設定以下項目：
@@ -139,7 +139,7 @@ export POP_LLM_MODEL=anthropic/claude-3-haiku
 ### 步驟 2 — 將 Point One Percent MCP 加入 Claude Code
 
 ```bash
-claude mcp add --scope user pop -- uv run --project /path/to/Point-One-Percent python -m pop_pay.mcp_server
+pop-launch --print-mcp
 ```
 
 > `--scope user` 將設定存入 `~/.claude.json`，**執行一次即永久生效**，在所有 Claude Code session 中都能使用。將 `/path/to/Point-One-Percent` 替換為實際的 clone 路徑，`.env` 與 `pop_state.db` 將從此目錄讀取。
@@ -171,7 +171,7 @@ Payment rules:
 
 **一次性設定**（clone 後由人工執行一次）：
 
-1. `cp .env.example .env` → 填入卡片資訊與政策設定
+1. `Create ~/pop-pay/.env with your credentials` → 填入卡片資訊與政策設定
 2. `pop-launch --print-mcp` → 執行它印出的兩條 `claude mcp add` 指令
 
 **每次工作階段**（若加入上方 System Prompt，Agent 會自動處理）：
@@ -198,13 +198,13 @@ Payment rules:
 
 ## 2. gemini-cli / Python 腳本整合
 
-對於使用 `gemini-cli` 或直接 Python Agent 迴圈的自動化腳本，可以將 `AegisClient` 直接作為支付中間層嵌入。
+對於使用 `gemini-cli` 或直接 Python Agent 迴圈的自動化腳本，可以將 `PopClient` 直接作為支付中間層嵌入。
 
-### 模式一：AegisClient 作為腳本中間層
+### 模式一：PopClient 作為腳本中間層
 
 ```python
 import asyncio
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 from pop_pay.providers.stripe_mock import MockStripeProvider
 from pop_pay.core.models import GuardrailPolicy, PaymentIntent
 
@@ -216,7 +216,7 @@ async def run_automated_workflow():
         max_daily_budget=200.0,
         block_hallucination_loops=True
     )
-    client = AegisClient(
+    client = PopClient(
         provider=MockStripeProvider(),  # 正式環境換成 StripeIssuingProvider
         policy=policy,
         db_path="pop_state.db"
@@ -250,8 +250,8 @@ asyncio.run(run_automated_workflow())
 如果你的 `gemini-cli` 提示使用工具呼叫，可以將 Point One Percent 封裝為 LangChain `BaseTool`：
 
 ```python
-from pop_pay.tools.langchain import AegisPaymentTool
-from pop_pay.client import AegisClient
+from pop_pay.tools.langchain import PopPaymentTool
+from pop_pay.client import PopClient
 from pop_pay.providers.stripe_mock import MockStripeProvider
 from pop_pay.core.models import GuardrailPolicy
 
@@ -261,10 +261,10 @@ policy = GuardrailPolicy(
     max_daily_budget=200.0,
     block_hallucination_loops=True
 )
-client = AegisClient(MockStripeProvider(), policy)
+client = PopClient(MockStripeProvider(), policy)
 
 # 在 Agent 工具清單中註冊
-pop_tool = AegisPaymentTool(client=client, agent_id="gemini-agent")
+pop_tool = PopPaymentTool(client=client, agent_id="gemini-agent")
 
 # 工具接受：requested_amount、target_vendor、reasoning
 result = await pop_tool._arun(
@@ -278,7 +278,7 @@ print(result)
 
 ### 模式三：LLM 護欄引擎
 
-若要在 Python 腳本中直接使用 LLM 護欄引擎（例如搭配本地 Ollama 推理），可在建構 `AegisClient` 時傳入 `LLMGuardrailEngine` 實例：
+若要在 Python 腳本中直接使用 LLM 護欄引擎（例如搭配本地 Ollama 推理），可在建構 `PopClient` 時傳入 `LLMGuardrailEngine` 實例：
 
 ```python
 from pop_pay.engine.llm_guardrails import LLMGuardrailEngine
@@ -288,7 +288,7 @@ llm_engine = LLMGuardrailEngine(
     model="llama3.2",
     use_json_mode=False
 )
-client = AegisClient(
+client = PopClient(
     provider=MockStripeProvider(),
     policy=policy,
     engine=llm_engine
@@ -361,7 +361,7 @@ uv run --extra llm python scripts/test_llm_guardrails.py
 ┌──────────────────────────────────────────────────────┐
 │              瀏覽器 Agent 層（繼續）                   │
 │                                                       │
-│  4. AegisBrowserInjector 透過 CDP 連線至 Chrome       │
+│  4. PopBrowserInjector 透過 CDP 連線至 Chrome       │
 │     (--remote-debugging-port=9222)                   │
 │  5. 穿透跨網域 Iframe（如 Stripe Elements）            │
 │  6. 將真實卡片注入 DOM — 非透過 page.fill()            │
@@ -378,7 +378,7 @@ uv run --extra llm python scripts/test_llm_guardrails.py
 ```python
 import asyncio
 from playwright.async_api import async_playwright
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 from pop_pay.providers.stripe_mock import MockStripeProvider
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy
 
@@ -389,7 +389,7 @@ async def browser_agent_with_pop():
         max_amount_per_tx=30.0,
         max_daily_budget=50.0
     )
-    client = AegisClient(MockStripeProvider(), policy, db_path="pop_state.db")
+    client = PopClient(MockStripeProvider(), policy, db_path="pop_state.db")
 
     # 2. 瀏覽器 Agent 偵測到結帳頁面，申請授權
     intent = PaymentIntent(
@@ -449,7 +449,7 @@ uv run python examples/agent_vault_flow.py
 ```python
 # browser-use 整合的偽代碼
 class POPCheckoutInterceptor:
-    def __init__(self, pop_client: AegisClient):
+    def __init__(self, pop_client: PopClient):
         self.client = pop_client
 
     async def on_checkout_detected(self, amount: float, vendor: str, context: str):
@@ -519,13 +519,13 @@ pop-launch --print-mcp
 與 §1 相同。OpenClaw 會從專案目錄、`~/.openclaw/.env` 或 `~/.openclaw/openclaw.json` 的 `env` 區塊讀取設定。複製範例並填入你的憑證：
 
 ```bash
-cp .env.example .env
+Create ~/pop-pay/.env with your credentials
 ```
 
 **步驟 2 — 註冊 Point One Percent MCP**
 
 ```bash
-openclaw mcp add pop -- uv run --project /path/to/Point-One-Percent python -m pop_pay.mcp_server
+openclaw mcp add pop-pay -- /path/to/venv/bin/python -m pop_pay.mcp_server
 ```
 
 或直接加入 `~/.openclaw/mcp_servers.json`：
