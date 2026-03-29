@@ -1290,7 +1290,7 @@ wheels = [
 
 [[package]]
 name = "pop-pay"
-version = "0.5.3"
+version = "0.5.6"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },

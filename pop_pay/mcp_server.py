@@ -7,11 +7,10 @@ from mcp.server.fastmcp import FastMCP
 load_dotenv()
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy
 from pop_pay.providers.stripe_mock import MockStripeProvider
-from pop_pay.providers.stripe_real import StripeIssuingProvider
 from pop_pay.providers.byoc_local import LocalVaultProvider
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 
-mcp = FastMCP("pop-vault")
+mcp = FastMCP("pop-pay")
 
 # ---------------------------------------------------------------------------
 # Load configuration from environment
@@ -36,6 +35,7 @@ policy = GuardrailPolicy(
 )
 
 if stripe_key:
+    from pop_pay.providers.stripe_real import StripeIssuingProvider
     provider = StripeIssuingProvider(api_key=stripe_key)
 elif os.getenv("POP_BYOC_NUMBER"):
     provider = LocalVaultProvider()
@@ -52,7 +52,7 @@ if engine_type == "llm":
         use_json_mode=True
     )
 
-client = AegisClient(provider, policy, engine=engine)
+client = PopClient(provider, policy, engine=engine)
 
 # ---------------------------------------------------------------------------
 # Optional: browser injector (only loaded when POP_AUTO_INJECT=true)
@@ -60,8 +60,8 @@ client = AegisClient(provider, policy, engine=engine)
 injector = None
 if auto_inject:
     try:
-        from pop_pay.injector import AegisBrowserInjector
-        injector = AegisBrowserInjector(client.state_tracker)
+        from pop_pay.injector import PopBrowserInjector
+        injector = PopBrowserInjector(client.state_tracker)
     except ImportError:
         pass  # playwright not installed — injector disabled silently
 

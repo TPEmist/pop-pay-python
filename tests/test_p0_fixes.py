@@ -1,6 +1,6 @@
 import pytest
 import uuid
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy, VirtualSeal
 from pop_pay.providers.base import VirtualCardProvider
 
@@ -23,7 +23,7 @@ async def test_daily_budget_enforcement():
         max_daily_budget=150.0,
         block_hallucination_loops=True
     )
-    client = AegisClient(MockProvider(), policy, db_path=":memory:")
+    client = PopClient(MockProvider(), policy, db_path=":memory:")
     
     intent = PaymentIntent(agent_id="test", requested_amount=100.0, target_vendor="cloud", reasoning="test")
     
@@ -46,7 +46,7 @@ async def test_burn_after_use_enforcement():
         max_daily_budget=500.0,
         block_hallucination_loops=True
     )
-    client = AegisClient(MockProvider(), policy, db_path=":memory:")
+    client = PopClient(MockProvider(), policy, db_path=":memory:")
     
     intent = PaymentIntent(agent_id="test", requested_amount=50.0, target_vendor="cloud", reasoning="test")
     seal = await client.process_payment(intent)
@@ -62,7 +62,7 @@ async def test_burn_after_use_enforcement():
 
 @pytest.mark.asyncio
 async def test_card_masking_langchain():
-    from pop_pay.tools.langchain import AegisPaymentTool
+    from pop_pay.tools.langchain import PopPaymentTool
     from pop_pay.core.models import VirtualSeal
     
     policy = GuardrailPolicy(
@@ -71,8 +71,8 @@ async def test_card_masking_langchain():
         max_daily_budget=500.0,
         block_hallucination_loops=True
     )
-    client = AegisClient(MockProvider(), policy, db_path=":memory:")
-    tool = AegisPaymentTool(client=client, agent_id="agent-1")
+    client = PopClient(MockProvider(), policy, db_path=":memory:")
+    tool = PopPaymentTool(client=client, agent_id="agent-1")
     
     result = await tool._arun(requested_amount=50.0, target_vendor="cloud", reasoning="Buying some compute")
     

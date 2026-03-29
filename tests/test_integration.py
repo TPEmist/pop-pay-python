@@ -1,8 +1,8 @@
 import pytest
 from pop_pay.core.models import GuardrailPolicy
 from pop_pay.providers.stripe_mock import MockStripeProvider
-from pop_pay.client import AegisClient
-from pop_pay.tools.langchain import AegisPaymentTool
+from pop_pay.client import PopClient
+from pop_pay.tools.langchain import PopPaymentTool
 
 @pytest.mark.asyncio
 async def test_integration_chain_success():
@@ -14,8 +14,8 @@ async def test_integration_chain_success():
         block_hallucination_loops=True
     )
     
-    client = AegisClient(provider, policy)
-    tool = AegisPaymentTool(client=client, agent_id="agent-007")
+    client = PopClient(provider, policy)
+    tool = PopPaymentTool(client=client, agent_id="agent-007")
     
     result = await tool._arun(
         requested_amount=20.0,
@@ -36,8 +36,8 @@ async def test_integration_chain_hallucination_rejection():
         block_hallucination_loops=True
     )
     
-    client = AegisClient(provider, policy)
-    tool = AegisPaymentTool(client=client, agent_id="agent-008")
+    client = PopClient(provider, policy)
+    tool = PopPaymentTool(client=client, agent_id="agent-008")
     
     result = await tool._arun(
         requested_amount=10.0,

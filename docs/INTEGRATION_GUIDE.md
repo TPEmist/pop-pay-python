@@ -66,13 +66,7 @@ alias chrome-cdp='google-chrome --remote-debugging-port=9222 --user-data-dir=/tm
 
 ### Step 1 — Configure `.env`
 
-Copy the provided example and fill in your credentials:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set at minimum:
+Create `~/pop-pay/.env` and set at minimum:
 
 ```bash
 POP_BYOC_NUMBER=4111111111111111   # Your real card number
@@ -137,10 +131,12 @@ export POP_LLM_MODEL=anthropic/claude-3-haiku
 ### Step 2 — Add Point One Percent MCP to Claude Code
 
 ```bash
-claude mcp add --scope user pop -- uv run --project /path/to/Point-One-Percent python -m pop_pay.mcp_server
+pop-launch --print-mcp
 ```
 
-> `--scope user` stores the registration in `~/.claude.json` — run **once**, available in every Claude Code session forever after. Replace `/path/to/Point-One-Percent` with the actual cloned path; this is where `pop_state.db` and `.env` will be read from.
+Copy the printed `claude mcp add pop-pay -- ...` command and run it. The command uses `sys.executable` from your venv, so it works correctly regardless of how you installed pop-pay.
+
+> `--scope user` (optional) stores the registration in `~/.claude.json` — available in every Claude Code session. Without it, the registration is scoped to the current project.
 
 ### Step 3 — Add Playwright MCP to Claude Code
 
@@ -169,7 +165,7 @@ Payment rules:
 
 **One-time setup** (human, after cloning):
 
-1. `cp .env.example .env` → fill in your card credentials and policy settings
+1. Create `~/pop-pay/.env` → fill in your card credentials and policy settings
 2. `pop-launch --print-mcp` → run the two `claude mcp add` commands it prints
 
 **Every session** (agent handles this if you add the system prompt above):
@@ -196,13 +192,13 @@ Once both MCPs are connected, paste this into a new Claude Code conversation:
 
 ## 2. gemini-cli / Python Script Integration
 
-For automation scripts that use `gemini-cli` or a raw Python agent loop, embed `AegisClient` directly as the payment middleware.
+For automation scripts that use `gemini-cli` or a raw Python agent loop, embed `PopClient` directly as the payment middleware.
 
-### Pattern: AegisClient as Script Middleware
+### Pattern: PopClient as Script Middleware
 
 ```python
 import asyncio
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 from pop_pay.providers.stripe_mock import MockStripeProvider
 from pop_pay.core.models import GuardrailPolicy, PaymentIntent
 
@@ -214,7 +210,7 @@ async def run_automated_workflow():
         max_daily_budget=200.0,
         block_hallucination_loops=True
     )
-    client = AegisClient(
+    client = PopClient(
         provider=MockStripeProvider(),  # swap for StripeIssuingProvider in prod
         policy=policy,
         db_path="pop_state.db"
@@ -248,8 +244,8 @@ asyncio.run(run_automated_workflow())
 If your `gemini-cli` prompt uses tools, wrap Point One Percent as a LangChain `BaseTool`:
 
 ```python
-from pop_pay.tools.langchain import AegisPaymentTool
-from pop_pay.client import AegisClient
+from pop_pay.tools.langchain import PopPaymentTool
+from pop_pay.client import PopClient
 from pop_pay.providers.stripe_mock import MockStripeProvider
 from pop_pay.core.models import GuardrailPolicy
 
@@ -259,10 +255,10 @@ policy = GuardrailPolicy(
     max_daily_budget=200.0,
     block_hallucination_loops=True
 )
-client = AegisClient(MockStripeProvider(), policy)
+client = PopClient(MockStripeProvider(), policy)
 
 # Register as a tool in your agent's tool list
-pop_tool = AegisPaymentTool(client=client, agent_id="gemini-agent")
+pop_tool = PopPaymentTool(client=client, agent_id="gemini-agent")
 
 # The tool accepts: requested_amount, target_vendor, reasoning
 result = await pop_tool._arun(
@@ -276,7 +272,7 @@ print(result)
 
 ### Pattern: LLM Guardrail Engine
 
-To use the LLM guardrail engine directly in a Python script (e.g. for local Ollama inference), pass an `LLMGuardrailEngine` instance when constructing `AegisClient`:
+To use the LLM guardrail engine directly in a Python script (e.g. for local Ollama inference), pass an `LLMGuardrailEngine` instance when constructing `PopClient`:
 
 ```python
 from pop_pay.engine.llm_guardrails import LLMGuardrailEngine
@@ -286,7 +282,7 @@ llm_engine = LLMGuardrailEngine(
     model="llama3.2",
     use_json_mode=False
 )
-client = AegisClient(
+client = PopClient(
     provider=MockStripeProvider(),
     policy=policy,
     engine=llm_engine
@@ -359,7 +355,7 @@ Browser agents that navigate real websites need to intercept the checkout flow a
 ┌──────────────────────────────────────────────────────┐
 │              Browser Agent Layer (resumed)            │
 │                                                       │
-│  4. AegisBrowserInjector attaches to Chrome via CDP  │
+│  4. PopBrowserInjector attaches to Chrome via CDP  │
 │     (--remote-debugging-port=9222)                   │
 │  5. Traverses cross-origin iframes (e.g. Stripe Elm.) │
 │  6. Injects real card into DOM — NOT via page.fill()  │
@@ -376,7 +372,7 @@ The following is a working implementation from [`examples/agent_vault_flow.py`](
 ```python
 import asyncio
 from playwright.async_api import async_playwright
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 from pop_pay.providers.stripe_mock import MockStripeProvider
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy
 
@@ -387,7 +383,7 @@ async def browser_agent_with_pop():
         max_amount_per_tx=30.0,
         max_daily_budget=50.0
     )
-    client = AegisClient(MockStripeProvider(), policy, db_path="pop_state.db")
+    client = PopClient(MockStripeProvider(), policy, db_path="pop_state.db")
 
     # 2. Browser agent detects a checkout form and requests authorization
     intent = PaymentIntent(
@@ -447,7 +443,7 @@ If you're using `browser-use` or Skyvern (which operate with higher-level visual
 ```python
 # Pseudo-code for browser-use integration
 class POPCheckoutInterceptor:
-    def __init__(self, pop_client: AegisClient):
+    def __init__(self, pop_client: PopClient):
         self.client = pop_client
 
     async def on_checkout_detected(self, amount: float, vendor: str, context: str):
@@ -516,15 +512,15 @@ pop-launch --print-mcp
 
 Same as §1. OpenClaw reads from `.env` in the project directory, `~/.openclaw/.env`, or via the `env` block in `~/.openclaw/openclaw.json`. Copy and fill in your credentials:
 
-```bash
-cp .env.example .env
-```
+Create `~/pop-pay/.env` with your credentials.
 
 **Step 2 — Register Point One Percent MCP**
 
 ```bash
-openclaw mcp add pop -- uv run --project /path/to/Point-One-Percent python -m pop_pay.mcp_server
+openclaw mcp add pop-pay -- /path/to/venv/bin/python -m pop_pay.mcp_server
 ```
+
+> Run `pop-launch --print-mcp` to get the exact command with the correct Python path.
 
 Or add directly to `~/.openclaw/mcp_servers.json`:
 
@@ -613,7 +609,7 @@ network:
 **Step 4 — Register MCPs (while connected to sandbox)**
 
 ```bash
-openclaw mcp add pop -- uv run python -m pop_pay.mcp_server
+openclaw mcp add pop-pay -- /path/to/venv/bin/python -m pop_pay.mcp_server
 openclaw mcp add playwright -- npx @playwright/mcp@latest --cdp-endpoint http://localhost:9222
 ```
 

@@ -25,7 +25,7 @@ Guardrails are the "brains" that decide whether a payment should be approved or 
 
 ### Browser Injector (Autonomous Fulfillment)
 For agent frameworks evaluating DOMs, Point One Percent autonomously fulfills authorized payments without leaking the card directly to the LLM. Once the policy and guardrails approve a request, the injection and submission happen without any per-transaction human confirmation.
-- **AegisBrowserInjector**: Connects strictly out-of-band via CDP (`Chrome DevTools Protocol`). Traverses cross-origin iframes (i.e. Stripe Elements) and auto-populates `<input>` elements safely. After injection, the agent clicks the submit button — this is a standard browser interaction, not a security concern, since card credentials are never in the agent's context.
+- **PopBrowserInjector**: Connects strictly out-of-band via CDP (`Chrome DevTools Protocol`). Traverses cross-origin iframes (i.e. Stripe Elements) and auto-populates `<input>` elements safely. After injection, the agent clicks the submit button — this is a standard browser interaction, not a security concern, since card credentials are never in the agent's context.
 - **Chrome must be launched with `--remote-debugging-port=9222`** before the injector can attach. Use `--user-data-dir` as well if Chrome is already running (required to open a separate CDP-enabled instance).
 - **When using Playwright MCP** (e.g., with Claude Code), configure it with `--cdp-endpoint http://localhost:9222` so that both Playwright MCP and Point One Percent MCP share the same Chrome instance. See [docs/INTEGRATION_GUIDE.md §1](./docs/INTEGRATION_GUIDE.md#1-claude-code--full-setup-with-cdp-injection) for the full setup.
 
@@ -72,7 +72,7 @@ Help us expand the range of virtual cards Point One Percent can issue by impleme
 
 ### 2. Dashboard Enhancements
 The Vault needs more robust management features:
-- **Real Budget-writeback logic:** Currently, the Max Daily Budget slider in the Dashboard is temporary. We need logic to save and persist these limits to the `pop_state.db` and enforce them within the `AegisClient`.
+- **Real Budget-writeback logic:** Currently, the Max Daily Budget slider in the Dashboard is temporary. We need logic to save and persist these limits to the `pop_state.db` and enforce them within the `PopClient`.
 
 ### 3. Guardrail Improvements
 - New semantic analysis patterns for the `LLMGuardrailEngine`.
@@ -81,11 +81,11 @@ The Vault needs more robust management features:
 
 ### 4. Injection Observability
 Based on real-world agent testing, two observability gaps have been identified:
-- **Billing field confirmation**: When `AegisBrowserInjector` auto-fills billing fields (name, address, email), the agent has no way to confirm what was filled without taking a screenshot. The `request_virtual_card` MCP tool should return a summary of which fields were filled and with what values (excluding the card number itself).
+- **Billing field confirmation**: When `PopBrowserInjector` auto-fills billing fields (name, address, email), the agent has no way to confirm what was filled without taking a screenshot. The `request_virtual_card` MCP tool should return a summary of which fields were filled and with what values (excluding the card number itself).
 - **Injection failure transparency**: If card field injection fails (e.g. payment form not found, iframe traversal issue), the MCP tool currently returns a generic error. More granular failure codes would help agents diagnose and report the correct remediation to users.
 
 ### 5. CDP Injection Resilience
-The `AegisBrowserInjector` handles most common checkout forms and cross-origin Stripe iframes. Contributions are welcome for:
+The `PopBrowserInjector` handles most common checkout forms and cross-origin Stripe iframes. Contributions are welcome for:
 - Shadow DOM traversal (web components used by some payment processors)
 - Dynamic form detection (forms that render after JS load with non-standard field naming)
 - Automated test fixtures covering more real-world checkout page structures

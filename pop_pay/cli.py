@@ -69,14 +69,14 @@ def _wait_for_chrome(port: int, timeout: float = 10.0) -> dict | None:
     return None
 
 
-def _print_mcp_instructions(port: int, project_root: pathlib.Path) -> None:
+def _print_mcp_instructions(port: int) -> None:
     """Print the claude mcp add commands the user needs to run."""
     cdp_endpoint = f"http://localhost:{port}"
     print()
     print("Point One Percent is ready. Add it to Claude Code with:")
     print()
     print(
-        f"  claude mcp add pop -- uv run --project {project_root} python -m pop_pay.mcp_server"
+        f"  claude mcp add pop-pay -- {sys.executable} -m pop_pay.mcp_server"
     )
     print(
         f"  claude mcp add playwright -- npx @playwright/mcp@latest --cdp-endpoint {cdp_endpoint}"
@@ -163,9 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Chrome is ready. Browser: {browser_version}")
 
     if args.print_mcp:
-        # Resolve project root: two levels up from this file (pop_pay/cli.py -> project root)
-        project_root = pathlib.Path(__file__).resolve().parent.parent
-        _print_mcp_instructions(args.port, project_root)
+        _print_mcp_instructions(args.port)
 
     return 0
 

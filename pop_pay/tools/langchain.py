@@ -3,16 +3,16 @@ from typing import Type, Any, Optional
 from pydantic import BaseModel, Field
 from langchain_core.tools import BaseTool
 from pop_pay.core.models import PaymentIntent
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 
 
-class AegisPaymentInput(BaseModel):
+class PopPaymentInput(BaseModel):
     requested_amount: float = Field(..., description="The amount of money to request.")
     target_vendor: str = Field(..., description="The vendor to pay.")
     reasoning: str = Field(..., description="Reasoning for this payment.")
 
 
-class AegisPaymentTool(BaseTool):
+class PopPaymentTool(BaseTool):
     name: str = "pop_payment_tool"
     description: str = (
         "Use this tool to request a one-time virtual card for an automated purchase. "
@@ -23,16 +23,16 @@ class AegisPaymentTool(BaseTool):
         "DO NOT retry with different reasoning if rejected. "
         "Provide the amount (float), target vendor (str), and your full reasoning (str)."
     )
-    args_schema: Type[BaseModel] = AegisPaymentInput
+    args_schema: Type[BaseModel] = PopPaymentInput
 
-    client: Any = Field(description="The AegisClient instance")
+    client: Any = Field(description="The PopClient instance")
     agent_id: str = Field(..., description="The ID of the Agent making the request")
-    injector: Optional[Any] = Field(default=None, description="Optional AegisBrowserInjector instance")
+    injector: Optional[Any] = Field(default=None, description="Optional PopBrowserInjector instance")
     cdp_url: str = Field(default="http://localhost:9222", description="CDP endpoint for browser injection")
 
     def __init__(
         self,
-        client: AegisClient,
+        client: PopClient,
         agent_id: str,
         injector=None,
         cdp_url: str = "http://localhost:9222",
@@ -53,7 +53,7 @@ class AegisPaymentTool(BaseTool):
         reasoning: str,
         run_manager=None,
     ) -> str:
-        return "Please use the async method ainvoke() for AegisPaymentTool."
+        return "Please use the async method ainvoke() for PopPaymentTool."
 
     async def _arun(
         self,

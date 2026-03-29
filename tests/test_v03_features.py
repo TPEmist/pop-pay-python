@@ -1,15 +1,15 @@
 """
 test_v03_features.py — Tests for v0.3.0 features:
-  - AegisClient engine injection
+  - PopClient engine injection
   - LLMGuardrailEngine configuration
   - MCP server environment variable logic
-  - AegisBrowserInjector unit tests (no real browser required)
-  - AegisPaymentTool with injector feedback loop
+  - PopBrowserInjector unit tests (no real browser required)
+  - PopPaymentTool with injector feedback loop
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 from pop_pay.engine.guardrails import GuardrailEngine
 from pop_pay.engine.llm_guardrails import LLMGuardrailEngine
 from pop_pay.core.models import GuardrailPolicy, PaymentIntent
@@ -25,12 +25,12 @@ async def test_client_engine_injection():
     provider = MockStripeProvider()
 
     # Default engine
-    client_default = AegisClient(provider, policy, db_path=":memory:")
+    client_default = PopClient(provider, policy, db_path=":memory:")
     assert isinstance(client_default.engine, GuardrailEngine)
 
     # Injected engine
     custom_engine = GuardrailEngine()
-    client_custom = AegisClient(provider, policy, engine=custom_engine, db_path=":memory:")
+    client_custom = PopClient(provider, policy, engine=custom_engine, db_path=":memory:")
     assert client_custom.engine is custom_engine
 
 
@@ -75,14 +75,14 @@ async def test_mcp_server_env_logic(monkeypatch):
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_injector_no_fields_returns_false():
-    from pop_pay.injector import AegisBrowserInjector
-    from pop_pay.core.state import AegisStateTracker
+    from pop_pay.injector import PopBrowserInjector
+    from pop_pay.core.state import PopStateTracker
 
-    tracker = AegisStateTracker(db_path=":memory:")
+    tracker = PopStateTracker(db_path=":memory:")
     # Insert a fake seal with card details
     tracker.record_seal("seal-abc", 10.0, "test", "Issued", "4111111111111111", "123", "12/28")
 
-    injector = AegisBrowserInjector(tracker)
+    injector = PopBrowserInjector(tracker)
 
     # Mock playwright to simulate "no card fields found" on any frame
     mock_frame = MagicMock()
@@ -118,7 +118,7 @@ async def test_injector_no_fields_returns_false():
 
     with patch.dict("sys.modules", {"playwright": mock_playwright_module, "playwright.async_api": mock_playwright_module.async_api}):
         # Need to import inside patch context
-        from pop_pay.injector import AegisBrowserInjector as Inj
+        from pop_pay.injector import PopBrowserInjector as Inj
         inj = Inj(tracker)
         result = await inj.inject_payment_info("seal-abc")
 
@@ -131,7 +131,7 @@ async def test_injector_no_fields_returns_false():
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
 async def test_langchain_tool_injector_failure_feedback():
-    from pop_pay.tools.langchain import AegisPaymentTool
+    from pop_pay.tools.langchain import PopPaymentTool
 
     policy = GuardrailPolicy(
         allowed_categories=["cloud"],
@@ -139,13 +139,13 @@ async def test_langchain_tool_injector_failure_feedback():
         max_daily_budget=500.0,
         block_hallucination_loops=True,
     )
-    client = AegisClient(MockStripeProvider(), policy, db_path=":memory:")
+    client = PopClient(MockStripeProvider(), policy, db_path=":memory:")
 
     # Mock injector that always fails
     mock_injector = MagicMock()
     mock_injector.inject_payment_info = AsyncMock(return_value=False)
 
-    tool = AegisPaymentTool(client=client, agent_id="test-agent", injector=mock_injector)
+    tool = PopPaymentTool(client=client, agent_id="test-agent", injector=mock_injector)
     result = await tool._arun(
         requested_amount=50.0,
         target_vendor="cloud",

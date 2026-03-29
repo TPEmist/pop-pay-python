@@ -3,7 +3,7 @@ Point One Percent — Browser Agent + Vault Flow Example
 ========================================================
 Demonstrates the full agent payment lifecycle using the Python SDK:
 
-  1. Agent requests a virtual card via AegisClient
+  1. Agent requests a virtual card via PopClient
   2. Point One Percent evaluates the intent against the guardrail policy
   3. On approval, the trusted local process injects real credentials
      into the browser form via Playwright — the agent only ever sees
@@ -22,7 +22,7 @@ import asyncio
 
 from playwright.async_api import async_playwright
 
-from pop_pay.client import AegisClient
+from pop_pay.client import PopClient
 from pop_pay.core.models import GuardrailPolicy, PaymentIntent
 from pop_pay.providers.stripe_mock import MockStripeProvider
 
@@ -38,7 +38,7 @@ async def agent_workflow() -> None:
         max_amount_per_tx=30.0,
         max_daily_budget=50.0,
     )
-    client = AegisClient(
+    client = PopClient(
         provider=MockStripeProvider(),
         policy=policy,
         db_path="pop_state.db",
