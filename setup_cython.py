@@ -13,4 +13,4 @@ try:
 except ImportError:
     extensions = []
 
-setup(ext_modules=extensions)
+setup(ext_modules=extensions, packages=[])
