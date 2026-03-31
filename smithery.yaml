@@ -1,0 +1,70 @@
+# Smithery configuration — https://smithery.ai/docs/build/project-config
+# Enables Glama quality/security scans and one-click install
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required: []
+    properties:
+      byocNumber:
+        type: string
+        description: "BYOC card number (stored locally, never sent to LLM)"
+      byocExpMonth:
+        type: string
+        description: "Card expiry month (MM)"
+      byocExpYear:
+        type: string
+        description: "Card expiry year (YY)"
+      byocCvv:
+        type: string
+        description: "Card CVV"
+      maxPerTx:
+        type: number
+        default: 100
+        description: "Maximum amount per transaction in USD"
+      maxDaily:
+        type: number
+        default: 500
+        description: "Maximum daily spend in USD"
+      allowedCategories:
+        type: string
+        default: "aws,openai,github,cloudflare,stripe"
+        description: "Comma-separated list of allowed vendor categories"
+      guardrailEngine:
+        type: string
+        default: "keyword"
+        description: "Guardrail engine: 'keyword' (default, zero-cost) or 'llm' (hybrid two-layer)"
+      llmApiKey:
+        type: string
+        description: "API key for LLM guardrail (only required if guardrailEngine=llm)"
+      llmBaseUrl:
+        type: string
+        description: "Base URL for LLM guardrail endpoint (OpenAI-compatible)"
+      llmModel:
+        type: string
+        default: "gpt-4o-mini"
+        description: "Model name for LLM guardrail"
+  commandFunction: |
+    (config) => ({
+      command: 'python',
+      args: ['-m', 'pop_pay.mcp_server'],
+      env: {
+        ...(config.byocNumber    && { POP_BYOC_NUMBER:    config.byocNumber }),
+        ...(config.byocExpMonth  && { POP_BYOC_EXP_MONTH: config.byocExpMonth }),
+        ...(config.byocExpYear   && { POP_BYOC_EXP_YEAR:  config.byocExpYear }),
+        ...(config.byocCvv       && { POP_BYOC_CVV:       config.byocCvv }),
+        POP_MAX_PER_TX:          String(config.maxPerTx  ?? 100),
+        POP_MAX_DAILY:           String(config.maxDaily  ?? 500),
+        POP_ALLOWED_CATEGORIES:  config.allowedCategories ?? 'aws,openai,github,cloudflare,stripe',
+        POP_GUARDRAIL_ENGINE:    config.guardrailEngine  ?? 'keyword',
+        ...(config.llmApiKey     && { POP_LLM_API_KEY:    config.llmApiKey }),
+        ...(config.llmBaseUrl    && { POP_LLM_BASE_URL:   config.llmBaseUrl }),
+        ...(config.llmModel      && { POP_LLM_MODEL:      config.llmModel }),
+      }
+    })
+  exampleConfig:
+    maxPerTx: 100
+    maxDaily: 500
+    allowedCategories: "aws,openai,github,cloudflare,stripe"
+    guardrailEngine: "keyword"

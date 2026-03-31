@@ -6,8 +6,11 @@
 
 # Point One Percent - Agent Pay
 
-[![glama badge](https://glama.ai/mcp/servers/TPEmist/Point-One-Percent/badges/score.svg)](https://glama.ai/mcp/servers/TPEmist/Point-One-Percent)
-<a href="https://www.producthunt.com/products/project-aegis?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-point-one-percent-ai-agent-pay" target="_blank" rel="noopener noreferrer"><img alt="Point One Percent - AI Agent Pay - Zero-knowledge payment guardrails for AI Agents. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1105745&theme=neutral&t=1774937261413"></a>
+<p align="center">
+  <a href="https://glama.ai/mcp/servers/TPEmist/Point-One-Percent"><img src="https://glama.ai/mcp/servers/TPEmist/Point-One-Percent/badges/score.svg" alt="Glama MCP score"></a>
+  &nbsp;&nbsp;
+  <a href="https://www.producthunt.com/products/project-aegis?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-point-one-percent-ai-agent-pay" target="_blank" rel="noopener noreferrer"><img alt="Point One Percent on Product Hunt" width="140" height="30" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1105745&theme=neutral&t=1774937261413"></a>
+</p>
 
 > it only takes 0.1% of Hallucination to drain 100% of your wallet.
 
