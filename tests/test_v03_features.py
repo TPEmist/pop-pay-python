@@ -79,8 +79,8 @@ async def test_injector_no_fields_returns_false():
     from pop_pay.core.state import PopStateTracker
 
     tracker = PopStateTracker(db_path=":memory:")
-    # Insert a fake seal with card details
-    tracker.record_seal("seal-abc", 10.0, "test", "Issued", "4111111111111111", "123", "12/28")
+    # Insert a fake seal with masked card only (cvv never stored)
+    tracker.record_seal("seal-abc", 10.0, "test", "Issued", masked_card="****-****-****-1111", expiration_date="12/28")
 
     injector = PopBrowserInjector(tracker)
 
@@ -120,7 +120,12 @@ async def test_injector_no_fields_returns_false():
         # Need to import inside patch context
         from pop_pay.injector import PopBrowserInjector as Inj
         inj = Inj(tracker)
-        result = await inj.inject_payment_info("seal-abc")
+        result = await inj.inject_payment_info(
+            "seal-abc",
+            card_number="4111111111111111",
+            cvv="123",
+            expiration_date="12/28",
+        )
 
     assert result == {"card_filled": False, "billing_filled": False}
     tracker.close()

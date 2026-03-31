@@ -5,6 +5,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
+# Prevent credentials from appearing in core dumps
+try:
+    import resource
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+except Exception:
+    pass  # Windows or restricted env — best effort
+
 # Load .env from the dedicated config dir first (preferred, keeps credentials out of the
 # project working directory and away from agent file-read tools).
 # Falls back to the standard dotenv cwd-search if no config file exists yet.
@@ -13,6 +20,30 @@ if _config_env.exists():
     load_dotenv(_config_env)
 else:
     load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Vault: load encrypted credentials if vault.enc exists
+# ---------------------------------------------------------------------------
+_vault_creds: dict = {}
+try:
+    from pop_pay.vault import vault_exists, load_vault, OSS_WARNING
+    if vault_exists():
+        import sys as _sys
+        _sys.stderr.write(OSS_WARNING)
+        _vault_creds = load_vault()
+except ImportError:
+    pass  # cryptography not installed, vault not available
+except ValueError as _ve:
+    import sys as _sys
+    _sys.stderr.write(f"\n⚠️  pop-pay vault error: {_ve}\n")
+
+# Vault credentials override env vars for BYOC
+if _vault_creds:
+    os.environ.setdefault("POP_BYOC_NUMBER", _vault_creds.get("card_number", ""))
+    os.environ.setdefault("POP_BYOC_CVV", _vault_creds.get("cvv", ""))
+    os.environ.setdefault("POP_BYOC_EXP_MONTH", _vault_creds.get("exp_month", ""))
+    os.environ.setdefault("POP_BYOC_EXP_YEAR", _vault_creds.get("exp_year", ""))
+
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy
 from pop_pay.providers.stripe_mock import MockStripeProvider
 from pop_pay.providers.byoc_local import LocalVaultProvider
@@ -121,6 +152,9 @@ async def request_virtual_card(
             seal_id=seal.seal_id,
             cdp_url=cdp_url,
             page_url=page_url,
+            card_number=seal.card_number or _vault_creds.get("card_number", ""),
+            cvv=seal.cvv or _vault_creds.get("cvv", ""),
+            expiration_date=seal.expiration_date or _vault_creds.get("expiration_date", ""),
         )
 
         # inject_payment_info now returns a dict; support both dict and legacy bool

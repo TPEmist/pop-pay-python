@@ -22,3 +22,11 @@ class VirtualSeal(BaseModel):
     authorized_amount: float = Field(..., ge=0, description="Amount authorized on the seal")
     status: str = Field(default="Issued", description="Status of the seal (e.g., Issued, Rejected, Revoked)")
     rejection_reason: Optional[str] = Field(default=None, description="Reason for rejection")
+
+    def __repr__(self):
+        return (f"VirtualSeal(seal_id={self.seal_id!r}, status={self.status!r}, "
+                f"card_number='****-REDACTED', cvv='***', "
+                f"authorized_amount={self.authorized_amount})")
+
+    def __str__(self):
+        return self.__repr__()

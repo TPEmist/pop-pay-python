@@ -85,11 +85,9 @@ async def agent_workflow() -> None:
             </body></html>
         """)
 
-        # Retrieve real credentials from the local vault (never from LLM output)
-        details = client.state_tracker.get_seal_details(seal.seal_id)
-
-        await page.fill("#card_num", details["card_number"])
-        await page.fill("#cvv",      details["cvv"])
+        # Inject real credentials from the in-memory seal (never fetched from DB)
+        await page.fill("#card_num", seal.card_number or "")
+        await page.fill("#cvv",      seal.cvv or "")
 
         screenshot_path = "agent_injection_proof.png"
         await page.screenshot(path=screenshot_path)

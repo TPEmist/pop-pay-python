@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **SQLite CVV removal:** `issued_seals` table no longer stores `card_number` or `cvv` columns. Only `masked_card` (e.g. `****-****-****-4242`) is persisted. An agent with file-read access to `pop_state.db` can no longer retrieve real card credentials via SQL.
+- **Vault encryption at rest:** New `vault.py` provides AES-256-GCM encrypted credential storage in `~/.config/pop-pay/vault.enc`. Key is machine-derived via scrypt; plaintext credentials never touch disk after `pop-init-vault` completes.
+- **Injector credential isolation:** `inject_payment_info()` now receives card credentials as parameters from the in-memory `VirtualSeal` object, not by fetching them from the database. `get_seal_details()` removed entirely.
+- **VirtualSeal repr redaction:** `__repr__` and `__str__` on `VirtualSeal` always emit `****-REDACTED` for `card_number` and `***` for `cvv`, preventing accidental credential logging.
+- **Core dump prevention:** `mcp_server.py` disables core dumps at startup via `resource.setrlimit(RLIMIT_CORE, (0, 0))` to prevent credentials appearing in crash dumps.
+
 ### Added
+- **`pop_pay/vault.py`:** AES-256-GCM encrypted credential vault with machine-derived scrypt key, atomic write, and OSS security notice.
+- **`pop_pay/cli_vault.py`:** Interactive `pop-init-vault` CLI command — prompts for card credentials, encrypts them, optionally wipes `.env`.
+- **`pop-init-vault` entry point:** New CLI script registered in `pyproject.toml`.
+- **`vault` optional dependency group:** `pip install 'pop-pay[vault]'` pulls in `cryptography`.
 - **Cython build pipeline:** `_vault_core.pyx` Cython extension for compiled key derivation; PyPI wheels include compiled `.so` with CI-injected secret salt; source builds fall back to `_vault_core_fallback.py` with public salt
 - **GitHub Actions `build-wheels.yml`:** cibuildwheel workflow for multi-platform wheel builds (Linux x86_64/aarch64, macOS x86_64/arm64, Windows)
 - **`pop-pay init-vault --hardened`:** Runtime indicator showing whether compiled (PyPI) or OSS salt is in use

@@ -49,14 +49,13 @@ class PopClient:
             
         # Issue card
         seal = await self.provider.issue_card(intent, self.policy)
-        # Record seal (success or rejection from provider)
+        # Record seal (success or rejection from provider) — only masked card stored
         self.state_tracker.record_seal(
-            seal.seal_id, 
-            seal.authorized_amount, 
-            intent.target_vendor, 
+            seal.seal_id,
+            seal.authorized_amount,
+            intent.target_vendor,
             status=seal.status,
-            card_number=seal.card_number,
-            cvv=seal.cvv,
+            masked_card=f"****-****-****-{seal.card_number[-4:]}" if seal.card_number else "****-****-****-????",
             expiration_date=seal.expiration_date
         )
         

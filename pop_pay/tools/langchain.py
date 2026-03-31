@@ -89,6 +89,9 @@ class PopPaymentTool(BaseTool):
             injection_ok = await self.injector.inject_payment_info(
                 seal_id=seal.seal_id,
                 cdp_url=self.cdp_url,
+                card_number=seal.card_number or "",
+                cvv=seal.cvv or "",
+                expiration_date=seal.expiration_date or "",
             )
 
             if not injection_ok:

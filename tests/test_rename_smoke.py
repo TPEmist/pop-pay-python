@@ -53,9 +53,10 @@ def test_pop_state_tracker_instantiation():
 def test_pop_state_tracker_record_seal():
     from pop_pay.core.state import PopStateTracker
     tracker = PopStateTracker(db_path=":memory:")
-    tracker.record_seal("seal-001", 25.0, "TestVendor", status="Issued")
-    details = tracker.get_seal_details("seal-001")
-    assert isinstance(details, dict)
+    tracker.record_seal("seal-001", 25.0, "TestVendor", status="Issued", masked_card="****-****-****-1234")
+    masked = tracker.get_seal_masked_card("seal-001")
+    assert isinstance(masked, str)
+    assert masked == "****-****-****-1234"
     tracker.close()
 
 

@@ -163,7 +163,7 @@ class PopBrowserInjector:
 
     Usage:
         injector = PopBrowserInjector(state_tracker)
-        success = await injector.inject_payment_info(seal_id)
+        success = await injector.inject_payment_info(seal_id, card_number=seal.card_number, cvv=seal.cvv, expiration_date=seal.expiration_date)
     """
 
     def __init__(self, state_tracker: PopStateTracker):
@@ -178,6 +178,9 @@ class PopBrowserInjector:
         seal_id: str,
         cdp_url: str = "http://localhost:9222",
         page_url: str = "",
+        card_number: str = "",
+        cvv: str = "",
+        expiration_date: str = "",
     ) -> dict:
         """
         Connect to an existing Chromium browser via CDP, find payment fields
@@ -187,13 +190,16 @@ class PopBrowserInjector:
         in the main page frame, if the env vars are set.
 
         Args:
-            seal_id:  The VirtualSeal ID returned by PopClient.process_payment().
-            cdp_url:  The Chrome DevTools Protocol endpoint (default: http://localhost:9222).
-            page_url: Optional. The checkout page URL currently open in the agent's browser.
-                      If provided and the CDP browser has no open pages, Aegis will
-                      automatically open this URL in the CDP browser before injecting.
-                      Pass this when navigating via Playwright MCP to ensure both
-                      MCPs operate on the same page.
+            seal_id:          The VirtualSeal ID returned by PopClient.process_payment().
+            cdp_url:          The Chrome DevTools Protocol endpoint (default: http://localhost:9222).
+            page_url:         Optional. The checkout page URL currently open in the agent's browser.
+                              If provided and the CDP browser has no open pages, Aegis will
+                              automatically open this URL in the CDP browser before injecting.
+                              Pass this when navigating via Playwright MCP to ensure both
+                              MCPs operate on the same page.
+            card_number:      Card number to inject (passed from in-memory seal, never from DB).
+            cvv:              CVV to inject (passed from in-memory seal, never from DB).
+            expiration_date:  Expiration date in MM/YY format.
 
         Returns a dict with:
             "card_filled"    — bool: card number field was found and filled.
@@ -212,14 +218,7 @@ class PopBrowserInjector:
             )
             return result
 
-        details = self.state_tracker.get_seal_details(seal_id)
-        if not details:
-            logger.error("PopBrowserInjector: seal_id '%s' not found in DB.", seal_id)
-            return result
-
-        card_number: str = details.get("card_number", "")
-        cvv: str = details.get("cvv", "")
-        expiry: str = details.get("expiration_date", "")
+        expiry: str = expiration_date
 
         # Collect billing info from env vars — all optional, skip if empty
         billing_info = {
