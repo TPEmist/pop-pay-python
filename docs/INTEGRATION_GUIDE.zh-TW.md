@@ -66,62 +66,51 @@ alias chrome-cdp='google-chrome --remote-debugging-port=9222 --user-data-dir=/tm
 
 </details>
 
-### 步驟 1 — 設定 `.env`
+### 步驟 1a — 初始化加密金庫
 
-建立 `~/.config/pop-pay/.env` 並填入你的憑證：
-
-編輯 `.env`，至少設定以下項目：
+卡片憑證儲存於 **AES-256-GCM 加密金庫**，不放在明文檔案中。執行一次完成設定：
 
 ```bash
-POP_BYOC_NUMBER=4111111111111111   # 你的真實卡號
-POP_BYOC_CVV=123
-POP_BYOC_EXP_MONTH=12             # 到期月份，例如 04
-POP_BYOC_EXP_YEAR=27              # 到期年份，例如 31
+pop-init-vault
+```
 
-# 策略設定
+程式會提示輸入卡號、CVV、到期日與帳單資料（輸入內容隱藏）。憑證加密存入 `~/.config/pop-pay/vault.enc`，MCP 伺服器啟動時自動解密 — 每次會話無需額外操作。
+
+**通行碼模式**（更強 — 可防禦具備 shell 執行能力的 Agent）：
+
+```bash
+pop-init-vault --passphrase   # 一次性設定：從通行碼衍生加密金鑰
+pop-unlock                     # 每次 MCP 伺服器會話前執行一次
+```
+
+`pop-unlock` 將衍生金鑰存入 OS 鑰匙圈，MCP 伺服器啟動時自動讀取 — 下次會話前才需再次輸入通行碼。
+
+> **安全等級（由低至高）：**
+> 明文 `.env` < 金庫，機器金鑰，原始碼安裝 < 金庫，機器金鑰，`pip install pop-pay` < 金庫＋通行碼 < Stripe Issuing（商業版，無本地憑證儲存）
+
+### 步驟 1b — 設定策略（`.env`）
+
+建立 `~/.config/pop-pay/.env`，**只放策略與非敏感設定** — 卡片憑證不在這裡：
+
+```bash
+# ── 消費策略 ──
 POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai"]
 POP_MAX_PER_TX=100.0
 POP_MAX_DAILY=500.0
 POP_BLOCK_LOOPS=true
 
-# 選填：帳單欄位（自動填入姓名、地址、電子郵件）
-# POP_BILLING_FIRST_NAME=John
-# POP_BILLING_LAST_NAME=Doe
-# POP_BILLING_STREET=123 Main St
-# POP_BILLING_ZIP=10001
-# POP_BILLING_EMAIL=john@example.com
+# ── CDP 注入 ──
+POP_AUTO_INJECT=true
+POP_CDP_URL=http://localhost:9222
 
-# 護欄模式："keyword"（預設，零成本）或 "llm"（雙層混合模式）
-# 完整比較表與 LLM 設定選項請見下方「護欄模式設定」小節。
+# ── 護欄模式："keyword"（預設）或 "llm" ──
 # POP_GUARDRAIL_ENGINE=keyword
 
-# 選填：自訂封鎖關鍵字，逗號分隔，加入 agent reasoning 的封鎖清單。
-# 延伸內建封鎖清單。範例：POP_EXTRA_BLOCK_KEYWORDS=competitor,internal-only
+# ── 自訂封鎖關鍵字（延伸內建清單）──
 # POP_EXTRA_BLOCK_KEYWORDS=
 ```
 
 > **修改 `.env` 後，請重新啟動 Agent 會話**（例如關閉並重新開啟 Claude Code）以使更改生效。MCP 伺服器在啟動時僅加載一次配置，不支援熱重載。
-
-### 保存庫加密（推薦）
-
-建議使用加密保存庫取代 `.env` 明文儲存憑證：
-
-**選項 A — 機器衍生金鑰（零操作）：**
-```bash
-pop-init-vault
-```
-憑證以機器特定金鑰加密，可防禦只具備檔案讀取能力的 Agent。
-正常啟動 MCP 伺服器 — 保存庫自動解密。
-
-**選項 B — 通行碼（更強保護）：**
-```bash
-pop-init-vault --passphrase   # 一次性設定
-pop-unlock                     # 每次 MCP 伺服器會話前執行
-```
-憑證以你的通行碼加密，即使 Agent 具備 shell 執行能力也無法解密。
-`pop-unlock` 將衍生金鑰存入 OS 鑰匙圈供本次會話使用 — MCP 伺服器啟動時自動讀取。
-
-> **安全等級（低 → 高）：** `.env` 檔案 < 保存庫（機器金鑰，OSS）< 保存庫（機器金鑰，PyPI）< 保存庫（通行碼）
 
 ### 護欄模式設定
 

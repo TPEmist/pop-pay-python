@@ -64,60 +64,51 @@ alias chrome-cdp='google-chrome --remote-debugging-port=9222 --user-data-dir=/tm
 
 </details>
 
-### Step 1 — Configure `.env`
+### Step 1a — Initialize the Credential Vault
 
-Create `~/.config/pop-pay/.env` and set at minimum:
+Card credentials are stored in an **AES-256-GCM encrypted vault**, not in a plaintext file. Run once to set up:
 
 ```bash
-POP_BYOC_NUMBER=4111111111111111   # Your real card number
-POP_BYOC_CVV=123
-POP_BYOC_EXP_MONTH=12             # Expiry month, e.g. 04
-POP_BYOC_EXP_YEAR=27              # Expiry year, e.g. 31
+pop-init-vault
+```
 
-# Policy settings
+You'll be prompted for your card number, CVV, expiry, and billing info (all input is hidden). Credentials are encrypted into `~/.config/pop-pay/vault.enc` and the MCP server decrypts them automatically at startup — nothing else to do per session.
+
+**Passphrase mode** (stronger — protects against agents with shell execution):
+
+```bash
+pop-init-vault --passphrase   # one-time setup: derives key from your passphrase
+pop-unlock                     # run once before each MCP server session
+```
+
+`pop-unlock` stores the derived key in the OS keyring. The MCP server reads it at startup — you never type your passphrase again until the next session.
+
+> **Security levels (lowest → highest):**
+> plaintext `.env` < vault, machine key, OSS source < vault, machine key, `pip install pop-pay` < vault + passphrase < Stripe Issuing (commercial, no local credentials)
+
+### Step 1b — Configure Policy (`.env`)
+
+Create `~/.config/pop-pay/.env` for **policy and non-sensitive config only** — no card credentials here:
+
+```bash
+# ── Spending policy ──
 POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai"]
 POP_MAX_PER_TX=100.0
 POP_MAX_DAILY=500.0
 POP_BLOCK_LOOPS=true
 
-# Optional: Billing fields for auto-fill (name, address, email)
-# POP_BILLING_FIRST_NAME=John
-# POP_BILLING_LAST_NAME=Doe
-# POP_BILLING_STREET=123 Main St
-# POP_BILLING_ZIP=10001
-# POP_BILLING_EMAIL=john@example.com
+# ── CDP injection ──
+POP_AUTO_INJECT=true
+POP_CDP_URL=http://localhost:9222
 
-# Guardrail mode: "keyword" (default, zero-cost) or "llm" (hybrid two-layer mode)
-# See "Guardrail Mode Configuration" below for the full comparison and LLM config options.
+# ── Guardrail mode: "keyword" (default) or "llm" ──
 # POP_GUARDRAIL_ENGINE=keyword
 
-# Optional: comma-separated list of custom keywords to block in agent reasoning.
-# Extends the built-in blocklist. Example: POP_EXTRA_BLOCK_KEYWORDS=competitor,internal-only
+# ── Custom block keywords (extends built-in list) ──
 # POP_EXTRA_BLOCK_KEYWORDS=
 ```
 
-> **After editing `.env`, restart your agent session** (e.g. close and reopen Claude Code) for the changes to take effect. The MCP server loads configuration once at startup — it does not hot-reload.
-
-### Vault Encryption (Recommended)
-
-Instead of storing credentials in `.env`, use the encrypted vault:
-
-**Option A — Machine-derived key (zero-touch):**
-```bash
-pop-init-vault
-```
-Credentials encrypted with a machine-specific key. Protects against file-read agents.
-Start MCP server normally — vault auto-decrypts.
-
-**Option B — Passphrase (stronger):**
-```bash
-pop-init-vault --passphrase   # one-time setup
-pop-unlock                     # run before each MCP server session
-```
-Credentials encrypted with your passphrase. Protects against agents with shell access.
-`pop-unlock` stores the derived key in OS keyring for the session — MCP server reads it automatically.
-
-> **Security levels (lowest → highest):** `.env` file < vault (machine key, OSS) < vault (machine key, PyPI) < vault (passphrase)
+> **After editing `.env`, restart your agent session** (e.g. close and reopen Claude Code). The MCP server loads configuration once at startup and does not hot-reload.
 
 ### Guardrail Mode Configuration
 
