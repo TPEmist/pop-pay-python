@@ -21,6 +21,10 @@ class CustomBuildHook(BuildHookInterface):
         if not pyx_path.exists():
             return
 
+        # Tell hatchling this wheel contains a compiled extension (platform-specific)
+        build_data['pure_python'] = False
+        build_data['infer_tag'] = True
+
         if compiled_salt:
             # Inject the secret salt into the .pyx before compiling
             source = pyx_path.read_text()
