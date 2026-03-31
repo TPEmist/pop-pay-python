@@ -87,22 +87,26 @@ POP_BLOCK_LOOPS=true
 # POP_BILLING_ZIP=10001
 # POP_BILLING_EMAIL=john@example.com
 
-# Guardrail mode: "keyword" (default, zero-cost) or "llm" (deep semantic analysis)
+# Guardrail mode: "keyword" (default, zero-cost) or "llm" (hybrid two-layer mode)
 # See "Guardrail Mode Configuration" below for the full comparison and LLM config options.
 # POP_GUARDRAIL_ENGINE=keyword
+
+# Optional: comma-separated list of custom keywords to block in agent reasoning.
+# Extends the built-in blocklist. Example: POP_EXTRA_BLOCK_KEYWORDS=competitor,internal-only
+# POP_EXTRA_BLOCK_KEYWORDS=
 ```
 
 > **After editing `.env`, restart your agent session** (e.g. close and reopen Claude Code) for the changes to take effect. The MCP server loads configuration once at startup — it does not hot-reload.
 
 ### Guardrail Mode Configuration
 
-By default, Point One Percent uses the `keyword` engine — a zero-cost, zero-dependency check that blocks obvious hallucination loops and prompt injection phrases. For production or high-value workflows, switch to `llm` mode for deep semantic analysis of each payment reasoning.
+By default, Point One Percent uses the `keyword` engine — a zero-cost, zero-dependency check that blocks obvious hallucination loops and prompt injection phrases. For production or high-value workflows, switch to `llm` mode: it runs Layer 1 keyword check first (fast, no API cost), then Layer 2 LLM semantic evaluation — only use if you need semantic reasoning checks beyond keyword matching.
 
 | | `keyword` (default) | `llm` |
 |---|---|---|
-| **How it works** | Blocks requests whose `reasoning` string contains suspicious keywords (e.g. "retry", "failed again", "ignore previous instructions") | Sends the agent's `reasoning` to an LLM for deep semantic analysis |
+| **How it works** | Blocks requests whose `reasoning` string contains suspicious keywords (e.g. "retry", "failed again", "ignore previous instructions") | Hybrid mode: Layer 1 keyword engine runs first (fast, no API cost), then Layer 2 LLM semantic evaluation |
 | **What it catches** | Obvious loops, hallucination phrases, prompt injection attempts | Subtle off-topic purchases, logical inconsistencies, policy violations that keyword matching misses |
-| **Cost** | Zero — no API calls, instant | One LLM call per `request_virtual_card` invocation |
+| **Cost** | Zero — no API calls, instant | Layer 1 is free; one LLM call per `request_virtual_card` invocation only if Layer 1 passes |
 | **Dependencies** | None | Any OpenAI-compatible endpoint |
 | **Best for** | Development, low-risk workflows, cost-sensitive setups | Production, high-value transactions, untrusted agent pipelines |
 
@@ -145,6 +149,17 @@ claude mcp add --scope user playwright -- npx @playwright/mcp@latest --cdp-endpo
 ```
 
 > **`--cdp-endpoint` is required.** It connects Playwright MCP to the **same Chrome** that Point One Percent uses for injection. Without it, Playwright runs its own isolated browser and Point One Percent cannot see the pages — injection will fail with a "could not find card fields" error. Run **once**; persists automatically.
+
+### `request_virtual_card` Parameters
+
+| Parameter | Required | Description |
+|---|---|---|
+| `requested_amount` | Yes | The transaction amount in USD. |
+| `target_vendor` | Yes | The vendor or service being purchased (e.g. `"openai"`, `"Wikipedia"`). Must match an entry in `POP_ALLOWED_CATEGORIES`. |
+| `reasoning` | Yes | The agent's explanation for why this purchase is needed. Evaluated by the guardrail engine. |
+| `page_url` | No | The current checkout page URL. Used to cross-validate the vendor domain against known domains to detect phishing. Pass `page.url` from the browser when using Playwright MCP. |
+
+> **Domain validation:** When `page_url` is provided and the `target_vendor` matches a known vendor (AWS, GitHub, Cloudflare, OpenAI, Stripe, Anthropic, Wikipedia, and others), pop-pay validates the page URL's domain against the expected domains for that vendor. Mismatched domains — a sign of a phishing page — cause the request to be rejected automatically.
 
 ### Recommended System Prompt Addition
 
@@ -340,7 +355,7 @@ Browser agents that navigate real websites need to intercept the checkout flow a
 │  2. Extract: amount, vendor, context                  │
 │  3. ─── PAUSE navigation ───────────────────────────►│
 └───────────────────────┬──────────────────────────────┘
-                        │  request_virtual_card(amount, vendor, reasoning)
+                        │  request_virtual_card(amount, vendor, reasoning, page_url=page.url)
                         ▼
 ┌──────────────────────────────────────────────────────┐
 │          Point One Percent (This library)             │

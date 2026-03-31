@@ -91,22 +91,26 @@ POP_BLOCK_LOOPS=true
 # POP_BILLING_ZIP=10001
 # POP_BILLING_EMAIL=john@example.com
 
-# 護欄模式："keyword"（預設，零成本）或 "llm"（深度語意分析）
+# 護欄模式："keyword"（預設，零成本）或 "llm"（雙層混合模式）
 # 完整比較表與 LLM 設定選項請見下方「護欄模式設定」小節。
 # POP_GUARDRAIL_ENGINE=keyword
+
+# 選填：自訂封鎖關鍵字，逗號分隔，加入 agent reasoning 的封鎖清單。
+# 延伸內建封鎖清單。範例：POP_EXTRA_BLOCK_KEYWORDS=competitor,internal-only
+# POP_EXTRA_BLOCK_KEYWORDS=
 ```
 
 > **修改 `.env` 後，請重新啟動 Agent 會話**（例如關閉並重新開啟 Claude Code）以使更改生效。MCP 伺服器在啟動時僅加載一次配置，不支援熱重載。
 
 ### 護欄模式設定
 
-Point One Percent 預設使用 `keyword` 引擎 — 這是一個零成本、零相依性的檢查機制，可攔截明顯的幻覺迴圈與提示注入語句。對於正式環境或高價值工作流程，可切換至 `llm` 模式，對每筆支付的理由進行深度語意分析。
+Point One Percent 預設使用 `keyword` 引擎 — 這是一個零成本、零相依性的檢查機制，可攔截明顯的幻覺迴圈與提示注入語句。對於正式環境或高價值工作流程，可切換至 `llm` 雙層模式：先跑 Layer 1 keyword 引擎（快速、無 API 費用），通過後才進入 Layer 2 LLM 語意評估。僅在需要超越關鍵字比對的語意推理檢查時使用。
 
 | | `keyword`（預設） | `llm` |
 |---|---|---|
-| **運作方式** | 攔截 `reasoning` 字串中含有可疑關鍵字的請求（如 "retry"、"failed again"、"ignore previous instructions"） | 將 Agent 的 `reasoning` 傳送給 LLM 進行深度語意分析 |
+| **運作方式** | 攔截 `reasoning` 字串中含有可疑關鍵字的請求（如 "retry"、"failed again"、"ignore previous instructions"） | 雙層模式：先跑 Layer 1 keyword 引擎（快速、無 API 費用），通過後才進入 Layer 2 LLM 語意評估 |
 | **攔截範圍** | 明顯的迴圈、幻覺語句、提示注入嘗試 | 細微的偏題採購、邏輯矛盾、關鍵字比對無法捕捉的違規行為 |
-| **成本** | 零 — 無 API 呼叫，即時完成 | 每次 `request_virtual_card` 呼叫消耗一次 LLM 呼叫 |
+| **成本** | 零 — 無 API 呼叫，即時完成 | Layer 1 免費；僅在通過 Layer 1 後才消耗一次 LLM 呼叫 |
 | **相依性** | 無 | 任何相容 OpenAI 的端點 |
 | **適用場景** | 開發階段、低風險工作流程、重視成本的環境 | 正式環境、高價值交易、不受信任的 Agent 管線 |
 
