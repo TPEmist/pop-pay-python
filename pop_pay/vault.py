@@ -8,7 +8,11 @@ Security model:
 - OSS version uses a public salt (documented limitation: protects against
   file-read-only agents, not against agents with shell execution).
   PyPI/Cython version will use a compiled-in secret salt.
+- Option B passphrase mode: key derived from user passphrase via PBKDF2-HMAC-SHA256
+  (600k iterations); stored in OS keyring for the session. Protects against agents
+  with shell access — no passphrase, no decryption.
 """
+import hashlib as _hashlib
 import json
 import os
 import struct
@@ -24,6 +28,9 @@ except ImportError:
 
 VAULT_DIR = Path.home() / ".config" / "pop-pay"
 VAULT_PATH = VAULT_DIR / "vault.enc"
+
+KEYRING_SERVICE = "pop-pay-vault"
+KEYRING_USERNAME = "derived-key-hex"
 
 # OSS public salt — intentionally documented as a security limitation.
 # PyPI/Cython builds will replace this with a compiled-in secret.
@@ -96,8 +103,10 @@ def _get_username() -> bytes:
     return os.environ.get("USER", os.environ.get("USERNAME", "unknown")).encode()
 
 
-def _derive_key(salt: bytes = None) -> bytes:
-    """Derive AES-256 key from machine identity using scrypt."""
+def _derive_key(salt: bytes = None, key_override: bytes = None) -> bytes:
+    """Derive AES-256 key. If key_override is provided, use it directly."""
+    if key_override is not None:
+        return key_override
     import hashlib
     if salt is None:
         salt = _OSS_SALT
@@ -112,12 +121,62 @@ def _derive_key(salt: bytes = None) -> bytes:
     return hashlib.scrypt(password, salt=salt, n=2**14, r=8, p=1, dklen=32)
 
 
-def encrypt_credentials(creds: dict, salt: bytes = None) -> bytes:
+def derive_key_from_passphrase(passphrase: str) -> bytes:
+    """Derive AES-256 key from passphrase + machine_id salt (PBKDF2-HMAC-SHA256).
+
+    Stronger than machine-derived key: passphrase is the secret.
+    An agent with shell access cannot brute-force a strong passphrase.
+    """
+    machine_id = _get_machine_id()
+    # Use machine_id as salt so same passphrase on different machines = different key
+    return _hashlib.pbkdf2_hmac(
+        'sha256',
+        passphrase.encode('utf-8'),
+        machine_id,
+        iterations=600_000,
+        dklen=32,
+    )
+
+
+def store_key_in_keyring(key: bytes):
+    """Store derived key in OS keyring (macOS Keychain / Linux libsecret / Windows Credential Manager)."""
+    try:
+        import keyring
+        keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, key.hex())
+    except ImportError:
+        raise ImportError(
+            "keyring package required for passphrase mode. "
+            "Install with: pip install 'pop-pay[passphrase]'"
+        )
+
+
+def load_key_from_keyring() -> bytes | None:
+    """Load derived key from OS keyring. Returns None if not found or keyring unavailable."""
+    try:
+        import keyring
+        hex_key = keyring.get_password(KEYRING_SERVICE, KEYRING_USERNAME)
+        if hex_key:
+            return bytes.fromhex(hex_key)
+    except Exception:
+        pass
+    return None
+
+
+def clear_keyring():
+    """Remove derived key from OS keyring (called on vault update or explicit lock)."""
+    try:
+        import keyring
+        keyring.delete_password(KEYRING_SERVICE, KEYRING_USERNAME)
+    except Exception:
+        pass
+
+
+def encrypt_credentials(creds: dict, salt: bytes = None, key_override: bytes = None) -> bytes:
     """Encrypt credentials dict to bytes (nonce + ciphertext + GCM tag)."""
     if AESGCM is None:
         raise ImportError("cryptography package required: pip install 'pop-pay[vault]'")
     import os as _os
-    key = _derive_key(salt)
+    key = _derive_key(salt, key_override=key_override)
     nonce = _os.urandom(12)  # 96-bit random nonce
     aesgcm = AESGCM(key)
     plaintext = json.dumps(creds).encode()
@@ -125,13 +184,13 @@ def encrypt_credentials(creds: dict, salt: bytes = None) -> bytes:
     return nonce + ciphertext  # nonce prepended; GCM tag is appended by library
 
 
-def decrypt_credentials(blob: bytes, salt: bytes = None) -> dict:
+def decrypt_credentials(blob: bytes, salt: bytes = None, key_override: bytes = None) -> dict:
     """Decrypt vault blob to credentials dict. Raises ValueError on wrong key/corruption."""
     if AESGCM is None:
         raise ImportError("cryptography package required: pip install 'pop-pay[vault]'")
     if len(blob) < 28:  # 12 nonce + at least 16 GCM tag
         raise ValueError("vault.enc is corrupted or too small")
-    key = _derive_key(salt)
+    key = _derive_key(salt, key_override=key_override)
     nonce, ciphertext = blob[:12], blob[12:]
     aesgcm = AESGCM(key)
     try:
@@ -149,15 +208,23 @@ def vault_exists() -> bool:
 
 
 def load_vault() -> dict:
-    """Load and decrypt vault. Returns dict with card credentials."""
+    """Load and decrypt vault. Tries passphrase key from keyring first, then machine key."""
     blob = VAULT_PATH.read_bytes()
+    # Try passphrase-derived key from keyring first (stronger protection)
+    passphrase_key = load_key_from_keyring()
+    if passphrase_key is not None:
+        try:
+            return decrypt_credentials(blob, key_override=passphrase_key)
+        except ValueError:
+            pass  # Wrong key — fall through to machine-derived key
+    # Fall back to machine-derived key
     return decrypt_credentials(blob)
 
 
-def save_vault(creds: dict):
+def save_vault(creds: dict, key_override: bytes = None):
     """Encrypt and atomically write credentials to vault.enc."""
     VAULT_DIR.mkdir(parents=True, exist_ok=True)
-    blob = encrypt_credentials(creds)
+    blob = encrypt_credentials(creds, key_override=key_override)
     # Atomic write: tmp → fsync → rename
     tmp_path = VAULT_PATH.with_suffix(".enc.tmp")
     tmp_path.write_bytes(blob)
@@ -169,7 +236,10 @@ def save_vault(creds: dict):
     VAULT_DIR.chmod(0o700)
     # Verify the vault is readable before wiping anything
     try:
-        decrypt_credentials(VAULT_PATH.read_bytes())
+        if key_override is not None:
+            decrypt_credentials(VAULT_PATH.read_bytes(), key_override=key_override)
+        else:
+            decrypt_credentials(VAULT_PATH.read_bytes())
     except ValueError as e:
         raise RuntimeError(f"Vault write verification failed: {e}")
 

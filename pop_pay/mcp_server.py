@@ -28,8 +28,10 @@ _vault_creds: dict = {}
 try:
     from pop_pay.vault import vault_exists, load_vault, OSS_WARNING
     if vault_exists():
+        from pop_pay.vault import load_key_from_keyring
         import sys as _sys
-        _sys.stderr.write(OSS_WARNING)
+        if load_key_from_keyring() is None:
+            _sys.stderr.write(OSS_WARNING)
         _vault_creds = load_vault()
 except ImportError:
     pass  # cryptography not installed, vault not available

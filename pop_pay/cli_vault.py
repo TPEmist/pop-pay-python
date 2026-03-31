@@ -1,4 +1,5 @@
 """pop-pay init-vault CLI command."""
+import argparse
 import getpass
 import sys
 from pathlib import Path
@@ -7,6 +8,11 @@ from pop_pay.vault import save_vault, vault_exists, secure_wipe_env, VAULT_DIR, 
 
 def cmd_init_vault():
     """Interactive setup: encrypt card credentials and burn .env."""
+    parser = argparse.ArgumentParser(description="Initialize pop-pay credential vault")
+    parser.add_argument("--passphrase", action="store_true",
+                        help="Protect vault with a passphrase (stronger; requires pop-unlock each session)")
+    args = parser.parse_args()
+
     print("pop-pay vault setup")
     print("=" * 40)
     print("Your card credentials will be encrypted and stored at:")
@@ -20,6 +26,25 @@ def cmd_init_vault():
         if overwrite != "y":
             print("Aborted.")
             sys.exit(0)
+
+    key_override = None
+    if args.passphrase:
+        from pop_pay.vault import derive_key_from_passphrase, store_key_in_keyring
+        print("\nPassphrase mode: your vault will be encrypted with a passphrase.")
+        print("You must run `pop-unlock` before each MCP server session.\n")
+        while True:
+            p1 = getpass.getpass("  Choose passphrase: ")
+            p2 = getpass.getpass("  Confirm passphrase: ")
+            if p1 != p2:
+                print("  Passphrases do not match. Try again.")
+                continue
+            if len(p1) < 8:
+                print("  Passphrase must be at least 8 characters.")
+                continue
+            key_override = derive_key_from_passphrase(p1)
+            store_key_in_keyring(key_override)
+            print("  Passphrase set. Vault unlocked for this session.")
+            break
 
     print("Enter your card credentials (input is hidden):")
     card_number = getpass.getpass("  Card number: ").strip().replace(" ", "").replace("-", "")
@@ -37,7 +62,7 @@ def cmd_init_vault():
 
     print("\nEncrypting and writing vault...")
     try:
-        save_vault(creds)
+        save_vault(creds, key_override=key_override)
     except Exception as e:
         print(f"ERROR: {e}")
         sys.exit(1)
@@ -56,4 +81,8 @@ def cmd_init_vault():
                 secure_wipe_env(env_path)
                 print(f"{env_path} wiped.")
 
-    print("\nSetup complete. The MCP server will auto-decrypt the vault at startup.")
+    if args.passphrase:
+        print("\nSetup complete. This session is already unlocked.")
+        print("Run `pop-unlock` before each new MCP server session.")
+    else:
+        print("\nSetup complete. The MCP server will auto-decrypt the vault at startup.")

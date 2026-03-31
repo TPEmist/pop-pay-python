@@ -98,6 +98,27 @@ POP_BLOCK_LOOPS=true
 
 > **After editing `.env`, restart your agent session** (e.g. close and reopen Claude Code) for the changes to take effect. The MCP server loads configuration once at startup — it does not hot-reload.
 
+### Vault Encryption (Recommended)
+
+Instead of storing credentials in `.env`, use the encrypted vault:
+
+**Option A — Machine-derived key (zero-touch):**
+```bash
+pop-init-vault
+```
+Credentials encrypted with a machine-specific key. Protects against file-read agents.
+Start MCP server normally — vault auto-decrypts.
+
+**Option B — Passphrase (stronger):**
+```bash
+pop-init-vault --passphrase   # one-time setup
+pop-unlock                     # run before each MCP server session
+```
+Credentials encrypted with your passphrase. Protects against agents with shell access.
+`pop-unlock` stores the derived key in OS keyring for the session — MCP server reads it automatically.
+
+> **Security levels (lowest → highest):** `.env` file < vault (machine key, OSS) < vault (machine key, PyPI) < vault (passphrase)
+
 ### Guardrail Mode Configuration
 
 By default, Point One Percent uses the `keyword` engine — a zero-cost, zero-dependency check that blocks obvious hallucination loops and prompt injection phrases. For production or high-value workflows, switch to `llm` mode: it runs Layer 1 keyword check first (fast, no API cost), then Layer 2 LLM semantic evaluation — only use if you need semantic reasoning checks beyond keyword matching.

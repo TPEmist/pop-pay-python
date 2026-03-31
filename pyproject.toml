@@ -11,6 +11,7 @@ dynamic = ["readme"]
 license = {text="MIT"}
 requires-python = ">=3.10"
 dependencies = [
+    "cryptography>=46.0.5",
     "pydantic",
     "python-dotenv",
 ]
@@ -24,11 +25,13 @@ dashboard = ["streamlit>=1.55.0"]
 dev = ["pytest", "pytest-asyncio"]
 browser = ["playwright>=1.40.0"]
 vault = ["cryptography"]
-all = ["pop-pay[llm,stripe,langchain,mcp,dashboard,browser,vault]"]
+passphrase = ["keyring"]
+all = ["pop-pay[llm,stripe,langchain,mcp,dashboard,browser,vault,passphrase]"]
 
 [project.scripts]
 pop-launch = "pop_pay.cli:main"
 pop-init-vault = "pop_pay.cli_vault:cmd_init_vault"
+pop-unlock = "pop_pay.cli_unlock:cmd_unlock"
 
 [tool.hatch.metadata.hooks.custom]
 path = "hatch_build.py"
