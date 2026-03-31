@@ -134,36 +134,36 @@ pip install "pop-pay[mcp,browser]"
 > **LLM guardrail mode?** Also install `pip install "pop-pay[mcp,browser,llm]"`.
 > **Contributing / local development?** See [CONTRIBUTING.md](./CONTRIBUTING.md) for the `git clone` + `uv sync` path.
 
-### Step 1b: Configure Your `.env`
+### Step 1b: Initialize the Credential Vault
 
-Create `~/.config/pop-pay/.env` — this is where `pop-pay` reads its configuration from:
+**v0.6.0+:** Credentials are stored in an AES-256-GCM encrypted vault — no plaintext `.env` required.
 
 ```bash
-# ── Payment policy ──
-POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai", "github"]
-POP_MAX_PER_TX=100.0
-POP_MAX_DAILY=500.0
-POP_BLOCK_LOOPS=true
-
-# ── CDP injection (required for BYOC card filling) ──
-POP_AUTO_INJECT=true
-POP_CDP_URL=http://localhost:9222
-
-# ── BYOC: Bring Your Own Card ──
-# POP_BYOC_NUMBER=4111111111111111
-# POP_BYOC_CVV=123
-# POP_BYOC_EXP_MONTH=12
-# POP_BYOC_EXP_YEAR=27
-
-# ── Billing info (for auto-filling billing fields) ──
-# POP_BILLING_FIRST_NAME=Jane
-# POP_BILLING_LAST_NAME=Doe
-# POP_BILLING_EMAIL=jane@example.com
-# POP_BILLING_STREET=123 Main St
-# POP_BILLING_ZIP=10001
+pop-init-vault
 ```
 
-> **`.env` location:** `pop-pay` reads from `~/.config/pop-pay/.env` first. This keeps your credentials outside the working directory and out of reach of agent file-read tools. If this path does not exist, it falls back to the standard dotenv cwd search — but `~/.config/pop-pay/.env` is strongly recommended for security.
+This will prompt for your card credentials (input is hidden), encrypt them into `~/.config/pop-pay/vault.enc`, and securely wipe any existing `.env`. The MCP server auto-decrypts the vault at startup — no extra steps needed per session.
+
+**Passphrase mode (stronger — protects against agents with shell access):**
+
+```bash
+pop-init-vault --passphrase   # one-time setup
+pop-unlock                     # run once before each MCP server session
+```
+
+`pop-unlock` derives the key from your passphrase and stores it in the OS keyring. The MCP server reads it automatically at startup.
+
+**Security levels (lowest → highest):**
+
+| Mode | Protects against |
+|---|---|
+| `.env` file (legacy) | Nothing — plaintext on disk |
+| Vault, machine key, OSS source | File-read agents |
+| Vault, machine key, `pip install pop-pay` | File-read agents + casual shell inspection |
+| Vault + passphrase | File-read agents + shell agents |
+| Stripe Issuing (commercial) | All local threats — no credentials stored |
+
+> **Policy & non-credential config** (allowed vendors, spending limits, CDP URL) is still read from `~/.config/pop-pay/.env`. Only card credentials moved to the vault.
 
 ### Step 2: Launch Chrome & Get MCP Commands
 
@@ -254,7 +254,22 @@ Point One Percent provides two modes of intent evaluation. Both are controlled b
 2. **LLM mode** (`POP_GUARDRAIL_ENGINE=llm`): The `LLMGuardrailEngine` sends the agent's `reasoning` to an LLM for deep semantic analysis, catching subtler misuse that keyword matching would miss — such as off-topic purchases or logically inconsistent justifications. Supports **any OpenAI-compatible endpoint**: OpenAI, Ollama (local), vLLM, OpenRouter, and more.
 
 ## 7. Security Statement
+
 Security is a first-class citizen in Point One Percent. The SDK **masks card numbers by default** (e.g., `****-****-****-4242`) when returning authorization results to the agent. This prevents sensitive payment information from leaking into agent chat logs, model context windows, or persistent logs, ensuring that only the execution environment handles the raw credentials.
+
+**v0.6.0 defense-in-depth hardening:**
+
+| Layer | Defense |
+|---|---|
+| **Encrypted vault** | Card credentials stored as AES-256-GCM ciphertext (`vault.enc`); plaintext never touches disk after `pop-init-vault` |
+| **Passphrase mode** | Key derived from user passphrase via PBKDF2 (600k iterations); stored in OS keyring — agents with shell access cannot derive the key |
+| **Database** | SQLite only stores masked card (`****-4242`); `card_number` and `cvv` columns removed entirely |
+| **Injection-time TOCTOU guard** | Domain verified against guardrail-approved vendor at the moment of injection — prevents redirect-to-attacker attacks |
+| **Repr redaction** | `VirtualSeal.__repr__` always emits `****-REDACTED`; credentials cannot leak via logs or tracebacks |
+| **Core dump prevention** | MCP server disables core dumps at startup (`RLIMIT_CORE=0`) |
+| **Process isolation** | Agent communicates via MCP JSON-RPC as a separate process — cannot access MCP server memory or env vars through the protocol |
+
+See [SECURITY.md](./SECURITY.md) for the full threat model, red team results, and documented limitations.
 
 ## 8. The Vault Dashboard
 

@@ -107,12 +107,33 @@ pip install pop-pay[all]
 
 如果你使用 OpenClaw、NemoClaw、Claude Code、OpenHands 或任何支援 MCP 的 Agentic 框架，你可以在 2 分鐘內啟動 Point One Percent：
 
-### 步驟一：安裝並啟動 MCP Server
+### 步驟一：安裝並初始化
 
 ```bash
-pip install pop-pay[mcp]
-python -m pop_pay.mcp_server
+pip install "pop-pay[mcp]"
+pop-init-vault
 ```
+
+`pop-init-vault` 會提示輸入卡片憑證（輸入內容隱藏），加密儲存至 `~/.config/pop-pay/vault.enc`，並安全銷毀原本的明文 `.env`。MCP Server 啟動時自動解密，無需額外操作。
+
+**密碼保護模式（更強——可防止具有 shell 執行權限的 Agent）：**
+
+```bash
+pop-init-vault --passphrase   # 一次性設定
+pop-unlock                     # 每次 MCP Server 會話前執行一次
+```
+
+**安全等級（由低至高）：**
+
+| 模式 | 防護對象 |
+|---|---|
+| `.env` 明文（舊版） | 無防護 |
+| Vault，機器金鑰，原始碼安裝 | 檔案讀取型 Agent |
+| Vault，機器金鑰，`pip install pop-pay` | 檔案讀取型 Agent + 一般 shell 檢查 |
+| Vault + 密碼保護 | 檔案讀取型 + shell 執行型 Agent |
+| Stripe Issuing（商業版） | 所有本地威脅 — 無憑證儲存 |
+
+> **政策設定**（允許的廠商、消費上限、CDP URL）仍從 `~/.config/pop-pay/.env` 讀取。只有卡片憑證移至加密金庫。
 
 > **貢獻者 / 本地開發？** 請參閱 [CONTRIBUTING.md](./CONTRIBUTING.md) 的 `git clone` + `uv sync` 流程。
 
@@ -195,7 +216,22 @@ Point One Percent 提供兩種意圖評估模式，皆透過 `.env` 中的 `POP_
 2. **LLM 模式**（`POP_GUARDRAIL_ENGINE=llm`）：`LLMGuardrailEngine` 將 Agent 的 `reasoning` 送往 LLM 進行深度語意分析，能捕捉關鍵字比對無法識別的細微濫用行為 — 例如離題購買或邏輯前後矛盾的理由。支援**任何 OpenAI 相容端點**：OpenAI、Ollama（本地）、vLLM、OpenRouter 等。
 
 ## 7. 安全聲明
+
 安全性是 Point One Percent 的第一優先。SDK **預設遮罩卡號**（如 `****-****-****-4242`），在回傳授權結果給 Agent 時不會暴露完整卡號。這能防止敏感支付資訊洩漏到 Agent 的對話紀錄、模型上下文視窗或持久化日誌中，確保只有執行環境能處理原始憑證。
+
+**v0.6.0 深度防禦強化：**
+
+| 防護層 | 機制 |
+|---|---|
+| **加密金庫** | 卡片憑證以 AES-256-GCM 加密儲存（`vault.enc`）；`pop-init-vault` 完成後明文永不落地 |
+| **密碼保護模式** | 金鑰由使用者密碼透過 PBKDF2（60 萬次迭代）衍生；儲存於 OS 鑰匙圈 — 具 shell 執行能力的 Agent 無法推導金鑰 |
+| **資料庫安全** | SQLite 僅儲存遮罩卡號（`****-4242`）；`card_number` 與 `cvv` 欄位已完全移除 |
+| **注入時 TOCTOU 防護** | 注入當下驗證域名與護欄批准的廠商相符 — 防止審核後跳轉到攻擊者網站 |
+| **Repr 遮罩** | `VirtualSeal.__repr__` 永遠輸出 `****-REDACTED`；憑證無法透過日誌或錯誤追蹤洩漏 |
+| **核心轉儲防護** | MCP Server 啟動時停用核心轉儲（`RLIMIT_CORE=0`） |
+| **程序隔離** | Agent 透過 MCP JSON-RPC 以獨立程序通訊 — 無法透過協議存取 MCP Server 的記憶體或環境變數 |
+
+完整威脅模型、紅隊測試結果與已知限制，請參閱 [SECURITY.md](./SECURITY.md)。
 
 ## 8. The Vault Dashboard（監控面板）
 
