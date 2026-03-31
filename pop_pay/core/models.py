@@ -12,6 +12,7 @@ class PaymentIntent(BaseModel):
     requested_amount: float = Field(..., gt=0, description="Amount requested")
     target_vendor: str = Field(..., max_length=200, description="Vendor to pay")
     reasoning: str = Field(..., max_length=2000, description="Agent reasoning for the payment")
+    page_url: Optional[str] = Field(default=None, description="Current checkout page URL for domain validation")
 
 class VirtualSeal(BaseModel):
     seal_id: str = Field(..., description="Unique ID for the virtual seal")

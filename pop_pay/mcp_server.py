@@ -44,13 +44,13 @@ else:
 
 engine = None
 if engine_type == "llm":
-    from pop_pay.engine.llm_guardrails import LLMGuardrailEngine
-    engine = LLMGuardrailEngine(
+    from pop_pay.engine.llm_guardrails import LLMGuardrailEngine, HybridGuardrailEngine
+    engine = HybridGuardrailEngine(LLMGuardrailEngine(
         api_key=llm_api_key,
         base_url=llm_base_url,
         model=llm_model,
         use_json_mode=True
-    )
+    ))
 
 client = PopClient(provider, policy, engine=engine)
 
@@ -95,6 +95,7 @@ async def request_virtual_card(
         requested_amount=requested_amount,
         target_vendor=target_vendor,
         reasoning=reasoning,
+        page_url=page_url or None,
     )
     seal = await client.process_payment(intent)
 
