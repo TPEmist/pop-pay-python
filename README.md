@@ -131,11 +131,9 @@ mkdir ~/pop-pay && cd ~/pop-pay
 python3 -m venv .venv && source .venv/bin/activate
 
 # Install — quotes required for zsh/bash
-pip install "pop-pay[mcp,browser]"
+pip install "pop-pay[all]"
 ```
 
-> **Mock card only (no injection)?** `pip install "pop-pay[mcp]"` is sufficient — skip the `[browser]` extra.
-> **LLM guardrail mode?** Also install `pip install "pop-pay[mcp,browser,llm]"`.
 > **Contributing / local development?** See [CONTRIBUTING.md](./CONTRIBUTING.md) for the `git clone` + `uv sync` path.
 
 ### Step 1b: Initialize the Credential Vault
