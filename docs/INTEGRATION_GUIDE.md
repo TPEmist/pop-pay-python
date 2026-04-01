@@ -104,10 +104,11 @@ POP_CDP_URL=http://localhost:9222
 # ── Guardrail mode: "keyword" (default) or "llm" ──
 # POP_GUARDRAIL_ENGINE=keyword
 
-# ── Billing info for auto-filling name/address fields on checkout pages ──
+# ── Billing info for auto-filling name/address/contact fields on checkout pages ──
 # POP_BILLING_FIRST_NAME=Jane
 # POP_BILLING_LAST_NAME=Doe
 # POP_BILLING_EMAIL=jane@example.com
+# POP_BILLING_PHONE=+14155551234   # E.164 format (country code + number)
 # POP_BILLING_STREET=123 Main St
 # POP_BILLING_ZIP=10001
 

@@ -106,10 +106,11 @@ POP_CDP_URL=http://localhost:9222
 # ── 護欄模式："keyword"（預設）或 "llm" ──
 # POP_GUARDRAIL_ENGINE=keyword
 
-# ── 帳單資料（自動填入結帳頁的姓名、地址欄位）──
+# ── 帳單資料（自動填入結帳頁的姓名、地址、電話欄位）──
 # POP_BILLING_FIRST_NAME=Jane
 # POP_BILLING_LAST_NAME=Doe
 # POP_BILLING_EMAIL=jane@example.com
+# POP_BILLING_PHONE=+14155551234   # E.164 格式（國碼＋號碼）
 # POP_BILLING_STREET=123 Main St
 # POP_BILLING_ZIP=10001
 
