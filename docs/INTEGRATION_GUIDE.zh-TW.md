@@ -94,7 +94,7 @@ pop-unlock                     # 每次 MCP 伺服器會話前執行一次
 
 ```bash
 # ── 消費策略 ──
-POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai"]
+POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai", "github", "wikipedia", "donation"]
 POP_MAX_PER_TX=100.0
 POP_MAX_DAILY=500.0
 POP_BLOCK_LOOPS=true
@@ -105,6 +105,13 @@ POP_CDP_URL=http://localhost:9222
 
 # ── 護欄模式："keyword"（預設）或 "llm" ──
 # POP_GUARDRAIL_ENGINE=keyword
+
+# ── 帳單資料（自動填入結帳頁的姓名、地址欄位）──
+# POP_BILLING_FIRST_NAME=Jane
+# POP_BILLING_LAST_NAME=Doe
+# POP_BILLING_EMAIL=jane@example.com
+# POP_BILLING_STREET=123 Main St
+# POP_BILLING_ZIP=10001
 
 # ── 自訂封鎖關鍵字（延伸內建清單）──
 # POP_EXTRA_BLOCK_KEYWORDS=

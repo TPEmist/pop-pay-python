@@ -92,7 +92,7 @@ Create `~/.config/pop-pay/.env` for **policy and non-sensitive config only** —
 
 ```bash
 # ── Spending policy ──
-POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai"]
+POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai", "github", "wikipedia", "donation"]
 POP_MAX_PER_TX=100.0
 POP_MAX_DAILY=500.0
 POP_BLOCK_LOOPS=true
@@ -103,6 +103,13 @@ POP_CDP_URL=http://localhost:9222
 
 # ── Guardrail mode: "keyword" (default) or "llm" ──
 # POP_GUARDRAIL_ENGINE=keyword
+
+# ── Billing info for auto-filling name/address fields on checkout pages ──
+# POP_BILLING_FIRST_NAME=Jane
+# POP_BILLING_LAST_NAME=Doe
+# POP_BILLING_EMAIL=jane@example.com
+# POP_BILLING_STREET=123 Main St
+# POP_BILLING_ZIP=10001
 
 # ── Custom block keywords (extends built-in list) ──
 # POP_EXTRA_BLOCK_KEYWORDS=
