@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-03-31
+
+### Security
+- **Downgrade attack prevention:** `POP_STRICT_MODE=1` env var refuses vault decryption if Cython hardened build is unavailable — prevents attacker from deleting `.so` to force re-initialization with weak OSS salt.
+- **Salt memory cleanup:** Reconstructed salt stored in `bytearray` and zeroed immediately after `scrypt` call.
+- **Obfuscated variable names:** XOR pair variables renamed from descriptive to non-descriptive names to raise binary reverse engineering cost.
+
 ## [0.6.2] - 2026-03-31
 
 ### Security
