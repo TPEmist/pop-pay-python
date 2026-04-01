@@ -32,8 +32,6 @@ VAULT_PATH = VAULT_DIR / "vault.enc"
 KEYRING_SERVICE = "pop-pay-vault"
 KEYRING_USERNAME = "derived-key-hex"
 
-VAULT_MODE_PATH = VAULT_DIR / ".vault_mode"
-
 # OSS public salt — intentionally documented as a security limitation.
 # PyPI/Cython builds will replace this with a compiled-in secret.
 _OSS_SALT = b"pop-pay-oss-v1-public-salt-2026"
@@ -230,14 +228,16 @@ def _write_vault_mode():
         mode = "hardened" if _vault_core.is_hardened() else "oss"
     except Exception:
         mode = "oss"
-    VAULT_MODE_PATH.write_text(mode)
-    VAULT_MODE_PATH.chmod(0o600)
+    marker = VAULT_DIR / ".vault_mode"
+    marker.write_text(mode)
+    marker.chmod(0o600)
 
 
 def _read_vault_mode() -> str:
     """Return 'hardened', 'oss', or 'unknown' if marker missing."""
-    if VAULT_MODE_PATH.exists():
-        return VAULT_MODE_PATH.read_text().strip()
+    marker = VAULT_DIR / ".vault_mode"
+    if marker.exists():
+        return marker.read_text().strip()
     return "unknown"
 
 
