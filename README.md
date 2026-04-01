@@ -196,6 +196,7 @@ Edit `~/.config/pop-pay/.env` (see Step 1b). Key variables:
 | `POP_MAX_DAILY` | `500.0` | Max $ per day |
 | `POP_BLOCK_LOOPS` | `true` | Block hallucination/retry loops |
 | `POP_AUTO_INJECT` | `false` | Enable CDP card injection |
+| `POP_GUARDRAIL_ENGINE` | `keyword` | Guardrail engine: `keyword` (zero-cost, default) or `llm` (semantic, two-layer) — see [Guardrail Mode](#guardrail-mode-keyword-vs-llm) |
 
 > **After editing `.env`, fully close and reopen Claude Code.** The MCP server loads configuration at startup — `!claude mcp list` alone is not sufficient to pick up `.env` changes.
 

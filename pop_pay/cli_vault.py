@@ -17,7 +17,6 @@ def cmd_init_vault():
     print("=" * 40)
     print("Your card credentials will be encrypted and stored at:")
     print(f"  {VAULT_PATH}")
-    print("The original .env will be securely wiped after encryption.")
     print()
     print(OSS_WARNING)
 
@@ -69,17 +68,43 @@ def cmd_init_vault():
 
     print(f"Vault written to {VAULT_PATH}")
 
-    # Offer to wipe .env
-    env_candidates = [
-        Path.home() / ".config" / "pop-pay" / ".env",
-        Path.cwd() / ".env",
-    ]
+    # Handle policy .env
+    policy_env_path = VAULT_DIR / ".env"
+    env_candidates = [policy_env_path, Path.cwd() / ".env"]
+
+    # If no policy .env exists yet, create a template
+    if not policy_env_path.exists():
+        print(f"\nNo policy config found at {policy_env_path}.")
+        create = input("Create a policy template .env? [Y/n]: ").strip().lower()
+        if create != "n":
+            VAULT_DIR.mkdir(parents=True, exist_ok=True)
+            policy_env_path.write_text(
+                "# pop-pay policy configuration\n"
+                "# Card credentials are stored in vault.enc — do not add them here.\n\n"
+                "# Vendors the agent is allowed to pay (JSON array)\n"
+                'POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai", "github"]\n\n'
+                "# Spending limits\n"
+                "POP_MAX_PER_TX=100.0\n"
+                "POP_MAX_DAILY=500.0\n"
+                "POP_BLOCK_LOOPS=true\n\n"
+                "# CDP injection (required for BYOC card filling)\n"
+                "POP_AUTO_INJECT=true\n"
+                "POP_CDP_URL=http://localhost:9222\n\n"
+                "# Guardrail engine: keyword (default, zero-cost) or llm\n"
+                "# POP_GUARDRAIL_ENGINE=keyword\n"
+            )
+            policy_env_path.chmod(0o600)
+            print(f"Template created at {policy_env_path} — edit to set your policy.")
+
+    # Offer to wipe any .env that contains card credentials
     for env_path in env_candidates:
         if env_path.exists():
-            wipe = input(f"\nSecurely wipe {env_path}? [y/N]: ").strip().lower()
-            if wipe == "y":
-                secure_wipe_env(env_path)
-                print(f"{env_path} wiped.")
+            content = env_path.read_text()
+            if any(k in content for k in ("POP_BYOC_NUMBER", "POP_BYOC_CVV")):
+                wipe = input(f"\n{env_path} contains card credentials. Securely wipe it? [y/N]: ").strip().lower()
+                if wipe == "y":
+                    secure_wipe_env(env_path)
+                    print(f"{env_path} wiped.")
 
     if args.passphrase:
         print("\nSetup complete. This session is already unlocked.")
