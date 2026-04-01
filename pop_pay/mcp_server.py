@@ -132,6 +132,8 @@ async def request_virtual_card(
     - DO NOT retry with a different reasoning if this tool returns a rejection.
     - Card credentials and billing info are auto-injected into the form —
       you only need to click the submit/pay button after approval.
+    - target_vendor: The human-readable vendor name (e.g. "AWS", "Wikipedia", "Maker Faire").
+      Do NOT pass a URL or domain — pass the vendor's common name.
     - page_url: Pass the current checkout page URL (e.g. from browser_navigate result).
       Required when using Playwright MCP — Point One Percent uses this to sync the page
       into its CDP browser for injection.
@@ -235,6 +237,10 @@ async def request_purchaser_info(
     - After this completes, navigate to the payment page and call request_virtual_card
       when card fields are visible.
 
+    target_vendor: The human-readable vendor or event name (e.g. "Maker Faire", "Wikipedia",
+      "AWS"). Do NOT pass a URL or domain name — pass the vendor's common name as you
+      would describe it to a human.
+
     DO NOT use if card input fields are already visible — use request_virtual_card instead
     (it fills both card credentials and billing info in one step).
 
@@ -252,11 +258,21 @@ async def request_purchaser_info(
     vendor_lower = target_vendor.lower()
     vendor_tokens = set(re.split(r'[\s\-_./]+', vendor_lower)) - {''}
     allowed_lower = [c.lower() for c in allowed_categories]
+    # Also check page_url domain tokens against allowed categories
+    # Handles the case where agent passes a domain as target_vendor (e.g. "bayarea.makerfaire.com")
+    from urllib.parse import urlparse
+    page_domain = urlparse(page_url).netloc.lower().removeprefix("www.") if page_url else ""
+    page_domain_tokens = set(re.split(r'[\s\-_./]+', page_domain)) - {''}
+
     vendor_allowed = (
         vendor_lower in allowed_lower                          # exact: "aws" == "aws"
         or any(tok in allowed_lower for tok in vendor_tokens) # token: "aws" in ["aws",...]
         or any(                                                # token-subset: all words of "maker faire"
             set(re.split(r'[\s\-_./]+', cat)) - {''} <= vendor_tokens  # appear in vendor tokens
+            for cat in allowed_lower
+        )
+        or any(                                                # fallback: match against page domain
+            set(re.split(r'[\s\-_./]+', cat)) - {''} <= page_domain_tokens
             for cat in allowed_lower
         )
     )
