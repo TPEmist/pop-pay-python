@@ -82,7 +82,7 @@ def cmd_init_vault():
                 "# pop-pay policy configuration\n"
                 "# Card credentials are stored in vault.enc — do not add them here.\n\n"
                 "# Vendors the agent is allowed to pay (JSON array)\n"
-                'POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai", "github"]\n\n'
+                'POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai", "github", "wikipedia", "donation"]\n\n'
                 "# Spending limits\n"
                 "POP_MAX_PER_TX=100.0\n"
                 "POP_MAX_DAILY=500.0\n"
