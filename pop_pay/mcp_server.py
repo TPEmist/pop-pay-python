@@ -247,13 +247,15 @@ async def request_purchaser_info(
         )
 
     # Lightweight vendor check: is this vendor in the allowed list?
+    # Three-way match: exact | token-in-allowed | allowed-substring-of-vendor
     import re
     vendor_lower = target_vendor.lower()
     vendor_tokens = set(re.split(r'[\s\-_./]+', vendor_lower)) - {''}
     allowed_lower = [c.lower() for c in allowed_categories]
-    vendor_allowed = any(
-        tok in allowed_lower or vendor_lower in allowed_lower
-        for tok in vendor_tokens
+    vendor_allowed = (
+        vendor_lower in allowed_lower                          # exact: "aws" == "aws"
+        or any(tok in allowed_lower for tok in vendor_tokens) # token: "aws" in ["aws",...]
+        or any(cat in vendor_lower for cat in allowed_lower)  # substring: "maker faire" in "maker faire bay area 2026"
     )
     if not vendor_allowed:
         return (

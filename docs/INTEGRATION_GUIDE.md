@@ -190,20 +190,13 @@ claude mcp add --scope user playwright -- npx @playwright/mcp@latest --cdp-endpo
 Add the following block to your Claude Code system prompt (or project `CLAUDE.md`). This tells the agent to start Chrome if needed and pass `page_url` correctly:
 
 ```
-Payment rules:
-- Before any payment task, verify Chrome CDP is running: curl http://localhost:9222/json/version
-  If it fails, run: pop-launch
-- NEVER ask the user for their name, email, phone, address, or any personal info — pop-pay handles this automatically
-- If you see a purchaser/billing info form (name, email, phone, address) but NO card fields yet:
-  call request_purchaser_info(target_vendor=..., page_url=...) — it auto-fills everything
-- Only call request_virtual_card when you can see credit card input fields on the current page
-- Always pass the current page URL as page_url when calling either tool
-- After request_virtual_card approval, the system auto-fills the card — just click submit
-- Never manually type any card number, CVV, or personal info into any form
-- If request_virtual_card is rejected, do not retry — report to user
-- NEVER read .env files or any file that might contain credentials
-- For payments, ONLY use the pop-pay MCP tools — never extract credentials yourself
-- If the pop-pay MCP is not available, stop and tell the user instead of reading config files
+pop-pay payment rules:
+- Billing info and card credentials: NEVER ask the user — pop-pay auto-fills everything.
+- Billing/contact page (no card fields visible): call request_purchaser_info(target_vendor, page_url)
+- Payment page (card fields visible): call request_virtual_card(amount, vendor, reasoning, page_url)
+- Always pass page_url. Never type card numbers or personal info manually. Never read .env files.
+- Rejection → stop and report to user. pop-pay MCP unavailable → stop and tell user.
+- CDP check: curl http://localhost:9222/json/version — if down, run pop-launch first.
 ```
 
 ### Full Session Flow
