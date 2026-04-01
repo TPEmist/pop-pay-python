@@ -136,6 +136,7 @@ def cmd_init_vault():
                 "# POP_BILLING_FIRST_NAME=Jane\n"
                 "# POP_BILLING_LAST_NAME=Doe\n"
                 "# POP_BILLING_EMAIL=jane@example.com\n"
+                "# POP_BILLING_PHONE=+14155551234\n"
                 "# POP_BILLING_STREET=123 Main St\n"
                 "# POP_BILLING_ZIP=10001\n"
             )

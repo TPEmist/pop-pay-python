@@ -151,6 +151,24 @@ EMAIL_SELECTORS = [
     "input[aria-label*='email']",
 ]
 
+PHONE_SELECTORS = [
+    "input[autocomplete='tel']",
+    "input[type='tel']",
+    "input[name='phone']",
+    "input[name='phone_number']",
+    "input[name='phoneNumber']",
+    "input[name='telephone']",
+    "input[name='mobile']",
+    "input[id*='phone']",
+    "input[id*='tel']",
+    "input[id*='mobile']",
+    "input[placeholder*='Phone']",
+    "input[placeholder*='phone']",
+    "input[placeholder*='Mobile']",
+    "input[aria-label*='Phone']",
+    "input[aria-label*='phone']",
+]
+
 
 class PopBrowserInjector:
     """
@@ -273,6 +291,7 @@ class PopBrowserInjector:
             "street":     os.getenv("POP_BILLING_STREET", "").strip(),
             "zip":        os.getenv("POP_BILLING_ZIP", "").strip(),
             "email":      os.getenv("POP_BILLING_EMAIL", "").strip(),
+            "phone":      os.getenv("POP_BILLING_PHONE", "").strip(),
         }
         has_billing = any(billing_info.values())
 
@@ -447,6 +466,7 @@ class PopBrowserInjector:
         street     = billing_info.get("street", "")
         zip_code   = billing_info.get("zip", "")
         email      = billing_info.get("email", "")
+        phone      = billing_info.get("phone", "")
 
         # First name
         if first_name:
@@ -521,7 +541,110 @@ class PopBrowserInjector:
                 except Exception as exc:
                     logger.debug("PopBrowserInjector: could not fill email: %s", exc)
 
+        # Phone (E.164 format, e.g. +14155551234)
+        if phone:
+            locator = await self._find_visible_locator(main_frame, PHONE_SELECTORS)
+            if locator:
+                try:
+                    await locator.fill(phone)
+                    logger.info("PopBrowserInjector: phone injected.")
+                    any_filled = True
+                except Exception as exc:
+                    logger.debug("PopBrowserInjector: could not fill phone: %s", exc)
+
         return any_filled
+
+    async def inject_billing_only(
+        self,
+        cdp_url: str = "http://localhost:9222",
+        page_url: str = "",
+        approved_vendor: str = "",
+    ) -> dict:
+        """
+        Inject billing fields (name, address, email, phone) into the current page
+        without issuing a card or touching the payment/budget system.
+
+        Used by request_purchaser_info for checkout flows where billing info
+        is collected on a separate page before the payment form.
+
+        Same TOCTOU domain guard as inject_payment_info.
+        Returns {"billing_filled": bool, "blocked_reason": str}.
+        """
+        result = {"billing_filled": False, "blocked_reason": ""}
+
+        # TOCTOU guard — same logic as inject_payment_info
+        if page_url and approved_vendor:
+            from urllib.parse import urlparse
+            import re
+            from pop_pay.engine.guardrails import KNOWN_VENDOR_DOMAINS
+            actual_domain = urlparse(page_url).netloc.lower().removeprefix("www.")
+            vendor_lower = approved_vendor.lower()
+            vendor_tokens = set(re.split(r'[\s\-_./]+', vendor_lower)) - {''}
+
+            domain_ok = False
+            vendor_is_known = False
+            for known_vendor, known_domains in KNOWN_VENDOR_DOMAINS.items():
+                if known_vendor in vendor_tokens or known_vendor == vendor_lower:
+                    vendor_is_known = True
+                    if any(actual_domain == d or actual_domain.endswith("." + d)
+                           for d in known_domains):
+                        domain_ok = True
+                    break
+            if not domain_ok and not vendor_is_known:
+                _common_tlds = {'com', 'org', 'net', 'io', 'co', 'uk', 'jp', 'de', 'fr'}
+                domain_labels = set(actual_domain.split(".")) - _common_tlds
+                domain_ok = bool(vendor_tokens.intersection(domain_labels))
+
+            if not domain_ok:
+                logger.warning(
+                    "PopBrowserInjector: TOCTOU domain mismatch (billing) — "
+                    "approved vendor '%s' does not match current page domain '%s'.",
+                    approved_vendor, actual_domain,
+                )
+                result["blocked_reason"] = f"domain_mismatch:{actual_domain}"
+                return result
+
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            logger.error("playwright is not installed.")
+            return result
+
+        billing_info = {
+            "first_name": os.getenv("POP_BILLING_FIRST_NAME", "").strip(),
+            "last_name":  os.getenv("POP_BILLING_LAST_NAME", "").strip(),
+            "street":     os.getenv("POP_BILLING_STREET", "").strip(),
+            "zip":        os.getenv("POP_BILLING_ZIP", "").strip(),
+            "email":      os.getenv("POP_BILLING_EMAIL", "").strip(),
+            "phone":      os.getenv("POP_BILLING_PHONE", "").strip(),
+        }
+
+        browser = None
+        try:
+            async with async_playwright() as pw:
+                browser = await pw.chromium.connect_over_cdp(cdp_url)
+                page = self._find_best_page(browser)
+
+                if page is None and page_url:
+                    page = await self._open_url_in_browser(browser, page_url)
+
+                if page is None:
+                    logger.warning("PopBrowserInjector: no open pages found for billing injection.")
+                    return result
+
+                await page.bring_to_front()
+                result["billing_filled"] = await self._fill_billing_fields(page, billing_info)
+                return result
+
+        except Exception as exc:
+            logger.error("PopBrowserInjector billing injection error: %s", exc, exc_info=True)
+            return result
+        finally:
+            if browser is not None:
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
 
     @staticmethod
     async def _find_visible_locator(frame, selectors: list):

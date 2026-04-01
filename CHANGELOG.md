@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.6] - 2026-04-01
+
+### Added
+- **`request_purchaser_info` MCP tool:** Fills billing/contact fields (name, email, phone, address) on purchaser info pages without issuing a card or touching the payment/budget system. Designed for two-page checkout flows where billing and payment are on separate pages. Includes the same TOCTOU domain guard and vendor whitelist check as `request_virtual_card`. Single-page checkouts (e.g. Wikipedia donate) continue to use only `request_virtual_card`.
+- **`POP_BILLING_PHONE` env var:** E.164 format phone number (`+14155551234`) for auto-filling phone fields on checkout pages. Added to `.env.example`, `pop-init-vault` template, and injector.
+
+### Changed
+- `request_virtual_card` docstring clarified: call this only when card fields are visible; billing fields are auto-filled on the same page as a side effect.
+
 ## [0.6.5] - 2026-04-01
 
 ### Security

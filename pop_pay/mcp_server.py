@@ -211,5 +211,77 @@ async def request_virtual_card(
     )
 
 
+@mcp.tool()
+async def request_purchaser_info(
+    target_vendor: str,
+    page_url: str = "",
+    reasoning: str = "",
+) -> str:
+    """Fill in purchaser/billing info (name, email, phone, address) on the current page.
+
+    WHEN TO USE THIS TOOL:
+    - Call this when you are on a billing/contact info page and can see fields
+      for name, email, phone, or address — but NO credit card fields yet.
+    - Do NOT call this if card input fields are already visible on the page;
+      use request_virtual_card instead (it fills billing fields too, in one step).
+    - After this tool completes, proceed to the next page and call
+      request_virtual_card when the payment form is visible.
+
+    This tool does NOT issue a card, does NOT charge anything, and does NOT
+    count against your spending budget. It only fills contact/billing fields.
+    """
+    if injector is None:
+        return (
+            "Billing info injection is not available. "
+            "Ensure POP_AUTO_INJECT=true in ~/.config/pop-pay/.env and restart the MCP server."
+        )
+
+    # Lightweight vendor check: is this vendor in the allowed list?
+    import re
+    vendor_lower = target_vendor.lower()
+    vendor_tokens = set(re.split(r'[\s\-_./]+', vendor_lower)) - {''}
+    allowed_lower = [c.lower() for c in allowed_categories]
+    vendor_allowed = any(
+        tok in allowed_lower or vendor_lower in allowed_lower
+        for tok in vendor_tokens
+    )
+    if not vendor_allowed:
+        return (
+            f"Vendor '{target_vendor}' is not in your allowed categories. "
+            f"Billing info will not be filled for unapproved vendors. "
+            f"Update POP_ALLOWED_CATEGORIES in ~/.config/pop-pay/.env to add it."
+        )
+
+    result = await injector.inject_billing_only(
+        cdp_url=cdp_url,
+        page_url=page_url,
+        approved_vendor=target_vendor,
+    )
+
+    blocked_reason = result.get("blocked_reason", "")
+    billing_filled = result.get("billing_filled", False)
+
+    if blocked_reason.startswith("domain_mismatch:"):
+        actual = blocked_reason.split(":", 1)[1]
+        return (
+            f"Blocked. Current page domain '{actual}' does not match "
+            f"approved vendor '{target_vendor}'. "
+            f"Possible navigation error — do not retry."
+        )
+
+    if not billing_filled:
+        return (
+            "Could not find billing fields on the current page. "
+            "Make sure you are on the billing/contact info page before calling this tool. "
+            "If using Playwright MCP, pass the current page URL as page_url."
+        )
+
+    return (
+        f"Billing info filled successfully for '{target_vendor}'. "
+        f"Name, address, email, and/or phone fields have been auto-populated. "
+        f"Proceed to the payment page and call request_virtual_card when card fields are visible."
+    )
+
+
 if __name__ == "__main__":
     mcp.run()
