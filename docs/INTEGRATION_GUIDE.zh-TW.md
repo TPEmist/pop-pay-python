@@ -161,6 +161,10 @@ pop-launch --print-mcp
 
 > `--scope user` 將設定存入 `~/.claude.json`，**執行一次即永久生效**，在所有 Claude Code session 中都能使用。將 `/path/to/Point-One-Percent` 替換為實際的 clone 路徑，`.env` 與 `pop_state.db` 將從此目錄讀取。
 
+```bash
+claude mcp add pop-pay ... #複製 pop-launch 的輸出
+```
+
 ### 步驟 3 — 將 Playwright MCP 加入 Claude Code
 
 ```bash

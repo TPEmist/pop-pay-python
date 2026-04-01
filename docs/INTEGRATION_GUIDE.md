@@ -159,6 +159,10 @@ pop-launch --print-mcp
 
 Copy the printed `claude mcp add pop-pay -- ...` command and run it. The command uses `sys.executable` from your venv, so it works correctly regardless of how you installed pop-pay.
 
+```bash
+claude mcp add pop-pay ... #Result from pop-launch --print-mcp
+```
+
 > `--scope user` (optional) stores the registration in `~/.claude.json` — available in every Claude Code session. Without it, the registration is scoped to the current project.
 
 ### Step 3 — Add Playwright MCP to Claude Code
