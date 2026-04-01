@@ -78,7 +78,7 @@ def cmd_init_vault():
         if env_path.exists():
             content = env_path.read_text()
             if any(k in content for k in ("POP_BYOC_NUMBER", "POP_BYOC_CVV")):
-                wipe = input(f"\n{env_path} contains card credentials. Securely wipe it? [y/N]: ").strip().lower()
+                wipe = input(f"\n\033[1;31m{env_path} contains card credentials. Securely wipe it?\033[0m [y/N]: ").strip().lower()
                 if wipe == "y":
                     secure_wipe_env(env_path)
                     print(f"{env_path} wiped.")
@@ -88,8 +88,8 @@ def cmd_init_vault():
     # If no policy .env exists (or was just wiped), offer to create a template
     if not policy_env_path.exists() or wiped_policy_env:
         print(f"\nNo policy config found at {policy_env_path}.")
-        create = input("Create a policy template .env? [Y/n]: ").strip().lower()
-        if create != "n":
+        create = input("Create a policy template .env? [y/N]: ").strip().lower()
+        if create == "y":
             VAULT_DIR.mkdir(parents=True, exist_ok=True)
             policy_env_path.write_text(
                 "# pop-pay policy configuration\n"
