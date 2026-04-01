@@ -21,7 +21,7 @@ If the agent has **arbitrary shell execution** and runs as the same OS user as t
 |---|---|---|---|---|
 | `.env` file (pre-v0.6.0) | ❌ Exposed | ❌ Exposed | N/A | ❌ |
 | Vault, OSS source, no passphrase | ✅ Blocked | ❌ Can call `derive_key()` with public salt | N/A | ✅ Blocked |
-| Vault, PyPI/Cython, no passphrase (v0.6.1+) | ✅ Blocked | ✅ Blocked (`derive_key` not Python-accessible; Cython `cdef` not exposed as module attribute) | ✅ Blocked (v0.6.4+) | ✅ Blocked |
+| Vault, PyPI/Cython, no passphrase (v0.6.1+) | ✅ Blocked | ⚠️ Must reverse `.so` first (salt never exposed as Python object) | ✅ Blocked (v0.6.4+) | ✅ Blocked |
 | Vault + passphrase (any install) | ✅ Blocked | ✅ Blocked (needs passphrase) | ✅ Blocked | ✅ Blocked (strong passphrase) |
 | **Stripe Issuing (commercial)** | ✅ Blocked | ✅ No credentials stored | ✅ | ✅ |
 
@@ -124,7 +124,7 @@ Card credentials are encrypted with AES-256-GCM. The encryption key is derived v
 
 | Attack | Result | Notes |
 |---|---|---|
-| A1: Call `derive_key()` from Python | ✅ BLOCKED | Cython did not expose `derive_key` as a Python-accessible module attribute — stronger than expected |
+| A1: Call `derive_key()` from Python | ⚠️ Callable, salt not extractable | `derive_key()` can be called (Cython `def` is Python-accessible); returns the AES-256 key but salt never surfaces. To steal the salt an attacker must reverse-engineer the `.so` with Ghidra/IDA Pro. Test environment showed AttributeError due to import path issue — not a real block. |
 | A2: Call `get_compiled_salt()` | ⚠️ Returned `None` (stub survived) | No sensitive data exposed; stub removed in v0.6.5 |
 | A3: Read `_A1` / `_B2` XOR constants | ✅ BLOCKED | Internal constants not accessible from Python layer |
 | A4: Downgrade attack (delete `.so`) | ✅ BLOCKED | `load_vault()` raises `RuntimeError`; refuses to decrypt |

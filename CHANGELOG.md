@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Removed `get_compiled_salt()` stub:** The function was removed from Python in v0.6.1 but a dead-code stub returning `None` survived in the compiled Cython `.so`. Removed from source to eliminate dead code. No security impact (the stub returned `None`), but clean removal closes the gap between intent and implementation.
 
 ### Testing
-- **Red team validation (v0.6.4 PyPI build):** Formal test of all five attack vectors against the published Cython wheel confirmed: `derive_key` is not Python-accessible (stronger than expected — Cython did not expose it as a module attribute), `_A1`/`_B2` XOR constants are not accessible from Python, downgrade attack blocked by `.vault_mode` marker, `.vault_mode` tampering causes decryption failure (wrong key path). Full results in SECURITY.md.
+- **Red team validation (v0.6.4 PyPI build):** Formal test of all five attack vectors against the published Cython wheel confirmed: `derive_key()` is callable from Python but the salt never surfaces (attacker gets the derived key, not the secret salt — reversing the salt requires Ghidra/IDA Pro binary analysis); `_A1`/`_B2` XOR constants are not accessible from Python; downgrade attack blocked by `.vault_mode` marker; `.vault_mode` tampering causes decryption failure (wrong key path). Full results in SECURITY.md.
 
 ## [0.6.4] - 2026-03-31
 
