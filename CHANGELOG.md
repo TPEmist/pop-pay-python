@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.7] - 2026-04-01
+
+### Fixed
+- **Vendor name matching:** Multi-word allowed categories (e.g. `"Maker Faire"`) now correctly match vendor names like `"Maker Faire Bay Area 2026"` using token-subset logic. Replaced unsafe substring check with token-subset check.
+- **Tool descriptions:** `request_purchaser_info` and `request_virtual_card` now explicitly state that the agent should never ask the user for personal info — pop-pay auto-fills from stored config.
+- **System prompt template:** Condensed to 6 lines while preserving all critical agent behavior rules.
+
 ## [0.6.6] - 2026-04-01
 
 ### Added
