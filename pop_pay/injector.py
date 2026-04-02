@@ -796,12 +796,16 @@ class PopBrowserInjector:
             return result
 
         billing_info = {
-            "first_name": os.getenv("POP_BILLING_FIRST_NAME", "").strip(),
-            "last_name":  os.getenv("POP_BILLING_LAST_NAME", "").strip(),
-            "street":     os.getenv("POP_BILLING_STREET", "").strip(),
-            "zip":        os.getenv("POP_BILLING_ZIP", "").strip(),
-            "email":      os.getenv("POP_BILLING_EMAIL", "").strip(),
-            "phone":      os.getenv("POP_BILLING_PHONE", "").strip(),
+            "first_name":         os.getenv("POP_BILLING_FIRST_NAME", "").strip(),
+            "last_name":          os.getenv("POP_BILLING_LAST_NAME", "").strip(),
+            "street":             os.getenv("POP_BILLING_STREET", "").strip(),
+            "city":               os.getenv("POP_BILLING_CITY", "").strip(),
+            "state":              os.getenv("POP_BILLING_STATE", "").strip(),
+            "country":            os.getenv("POP_BILLING_COUNTRY", "").strip(),
+            "zip":                os.getenv("POP_BILLING_ZIP", "").strip(),
+            "email":              os.getenv("POP_BILLING_EMAIL", "").strip(),
+            "phone":              os.getenv("POP_BILLING_PHONE", "").strip(),
+            "phone_country_code": os.getenv("POP_BILLING_PHONE_COUNTRY_CODE", "").strip(),
         }
 
         browser = None

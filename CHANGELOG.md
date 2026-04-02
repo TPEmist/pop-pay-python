@@ -8,7 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.6.16] - 2026-04-01
 
 ### Fixed
-- **`mcp_server.py` uncaught `RuntimeError` from vault:** When a hardened vault (built with PyPI Cython wheel) exists on the dev machine but tests run against OSS source (no compiled `.so`), `load_vault()` raises `RuntimeError`. The except clause only caught `ValueError`, causing module import failure and two test failures. Both exception types are now caught.
+- **mcp_server.py — RuntimeError not caught (H):** Vault `load_vault()` raises `RuntimeError` when a hardened vault exists but OSS source is running. Added `RuntimeError` to the existing `except (ValueError, RuntimeError)` guard — server no longer crashes on startup in this configuration.
+- **langchain.py — dict injection result always truthy (H-1):** `inject_payment_info()` returns a dict; `if not injection_ok:` was always False for any non-empty dict, masking injection failures and skipping budget rollback. Now inspects `card_filled` key explicitly.
+- **inject_billing_only — missing billing fields (H-2):** `billing_info` dict in `inject_billing_only` was missing `city`, `state`, `country`, `phone_country_code`. All `POP_BILLING_*` env vars now consistently read in both `inject_payment_info` and `inject_billing_only`.
+- **llm_guardrails.py — @retry decorator never fires (M-4):** All exceptions were caught inside `evaluate_intent`, preventing tenacity from seeing them. Retriable errors (`APIStatusError` with 429/5xx, `APIConnectionError`) now re-raise so tenacity can back off and retry.
+
+### Docs
+- **Integration Guide L-3:** Removed non-existent `get_seal_details()` call; replaced with correct `seal.card_number / .cvv / .expiration_date` access.
+- **README M-1:** Added explicit note that Stripe Issuing returns last-4-only — CDP auto-injection is incompatible; BYOC required for injection.
 
 ## [0.6.15] - 2026-04-01
 

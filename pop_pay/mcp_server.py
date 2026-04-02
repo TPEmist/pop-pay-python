@@ -36,8 +36,6 @@ try:
 except ImportError:
     pass  # cryptography not installed, vault not available
 except (ValueError, RuntimeError) as _ve:
-    # ValueError: decryption failure / bad passphrase
-    # RuntimeError: hardened vault detected but compiled .so not present (OSS source build)
     import sys as _sys
     _sys.stderr.write(f"\n⚠️  pop-pay vault error: {_ve}\n")
 

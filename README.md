@@ -407,4 +407,6 @@ python -m pop_pay.mcp_server
 - Returns masked card details (last 4 digits only) to the agent
 - All Stripe errors are caught and returned as rejection reasons
 
+> **CDP injection limitation with Stripe Issuing:** The Stripe Issuing API returns only the last 4 digits of the card number for security reasons. CDP auto-injection (`POP_AUTO_INJECT=true`) requires the full PAN and therefore **does not work** with Stripe Issuing. Use BYOC (`POP_BYOC_NUMBER`) if you need CDP injection; use Stripe Issuing if you need a real card and will handle form submission yourself.
+
 > **Note:** Stripe Issuing is a premium Stripe product that requires approval. For most development and demo use cases, the Mock provider is sufficient.

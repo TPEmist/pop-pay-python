@@ -86,7 +86,7 @@ class PopPaymentTool(BaseTool):
         # Auto-injection path: if an injector is provided, fill the browser
         # -------------------------------------------------------------------
         if self.injector is not None:
-            injection_ok = await self.injector.inject_payment_info(
+            injection_result = await self.injector.inject_payment_info(
                 seal_id=seal.seal_id,
                 cdp_url=self.cdp_url,
                 card_number=seal.card_number or "",
@@ -94,7 +94,14 @@ class PopPaymentTool(BaseTool):
                 expiration_date=seal.expiration_date or "",
             )
 
-            if not injection_ok:
+            # inject_payment_info returns a dict; a non-empty dict is always truthy
+            # so we must inspect card_filled explicitly rather than using bool(result)
+            if isinstance(injection_result, dict):
+                card_filled = injection_result.get("card_filled", False)
+            else:
+                card_filled = bool(injection_result)
+
+            if not card_filled:
                 # Cancel the budget reservation — treat as if never issued
                 self.client.state_tracker.mark_used(seal.seal_id)
                 return (

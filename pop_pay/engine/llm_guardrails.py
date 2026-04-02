@@ -3,6 +3,11 @@ from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_excep
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy
 from pop_pay.engine.guardrails import GuardrailEngine
 
+# Exceptions that warrant a retry (rate limits, transient server errors).
+# Defined at module level so the @retry decorator can reference them before
+# openai is imported — the actual classes are resolved lazily inside the engine.
+_RETRIABLE_OPENAI_STATUS_CODES = {429, 500, 502, 503, 504}
+
 # openai is an optional dependency (pip install pop-pay[llm])
 # Imported lazily inside LLMGuardrailEngine to avoid ImportError when [llm] extra is not installed.
 
@@ -55,13 +60,20 @@ Respond ONLY with valid JSON: {{"approved": bool, "reason": str}}"""
         try:
             response = await self.client.chat.completions.create(**kwargs)
             result_text = response.choices[0].message.content
-
             result = json.loads(result_text)
             return result.get("approved", False), result.get("reason", "Unknown")
-        except self._openai.OpenAIError as e:
-            # Handle API authentication/connection errors without crashing the main loop
+        except self._openai.APIStatusError as e:
+            # Re-raise retriable status codes (rate limit, server errors) so
+            # tenacity's @retry decorator can back off and retry.
+            # Non-retriable errors (auth, bad request) are caught and returned.
+            if e.status_code in _RETRIABLE_OPENAI_STATUS_CODES:
+                raise
             return False, f"LLM Guardrail API Error: {str(e)}"
-        except (json.JSONDecodeError, KeyError, Exception) as e:
+        except self._openai.APIConnectionError:
+            raise  # network error — let tenacity retry
+        except self._openai.OpenAIError as e:
+            return False, f"LLM Guardrail API Error: {str(e)}"
+        except (json.JSONDecodeError, KeyError) as e:
             return False, f"LLM Engine Parse Error: {str(e)}"
 
 
