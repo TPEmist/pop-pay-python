@@ -18,6 +18,62 @@ from typing import Optional
 
 from pop_pay.core.state import PopStateTracker
 
+
+# ---------------------------------------------------------------------------
+# E.164 phone parser — no external dependency
+# ---------------------------------------------------------------------------
+# Ordered from longest to shortest so greedy matching works correctly.
+# Sources: ITU-T E.164 assignment list (covers ~99% of real-world numbers).
+_E164_PREFIXES: tuple[str, ...] = (
+    # 3-digit country codes
+    "+212","+213","+216","+218","+220","+221","+222","+223","+224","+225",
+    "+226","+227","+228","+229","+230","+231","+232","+233","+234","+235",
+    "+236","+237","+238","+239","+240","+241","+242","+243","+244","+245",
+    "+246","+247","+248","+249","+250","+251","+252","+253","+254","+255",
+    "+256","+257","+258","+260","+261","+262","+263","+264","+265","+266",
+    "+267","+268","+269","+290","+291","+297","+298","+299",
+    "+350","+351","+352","+353","+354","+355","+356","+357","+358","+359",
+    "+370","+371","+372","+373","+374","+375","+376","+377","+378","+380",
+    "+381","+382","+385","+386","+387","+389",
+    "+420","+421","+423",
+    "+500","+501","+502","+503","+504","+505","+506","+507","+508","+509",
+    "+590","+591","+592","+593","+594","+595","+596","+597","+598","+599",
+    "+670","+672","+673","+674","+675","+676","+677","+678","+679","+680",
+    "+681","+682","+683","+685","+686","+687","+688","+689","+690","+691",
+    "+692","+850","+852","+853","+855","+856","+880","+886",
+    "+960","+961","+962","+963","+964","+965","+966","+967","+968","+970",
+    "+971","+972","+973","+974","+975","+976","+977",
+    "+992","+993","+994","+995","+996","+998",
+    # 2-digit country codes
+    "+20","+27","+30","+31","+32","+33","+34","+36","+39",
+    "+40","+41","+43","+44","+45","+46","+47","+48","+49",
+    "+51","+52","+53","+54","+55","+56","+57","+58",
+    "+60","+61","+62","+63","+64","+65","+66",
+    "+81","+82","+84","+86",
+    "+90","+91","+92","+93","+94","+95","+98",
+    # 1-digit country codes (last — shortest match)
+    "+1","+7",
+)
+
+
+def _parse_e164(phone: str) -> tuple[str, str]:
+    """
+    Split an E.164 number into (country_code, national_number).
+
+    "+14155551234" → ("+1", "4155551234")
+    "+447911123456" → ("+44", "7911123456")
+    "+85223456789"  → ("+852", "23456789")
+
+    Falls back to ("+1", rest) if no prefix matches — safe default for NANP.
+    Returns ("", phone) for non-E.164 input (no leading +).
+    """
+    if not phone.startswith("+"):
+        return ("", phone)
+    for prefix in _E164_PREFIXES:
+        if phone.startswith(prefix) and len(phone) > len(prefix):
+            return (prefix, phone[len(prefix):])
+    return ("+1", phone[1:])
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -651,20 +707,22 @@ class PopBrowserInjector:
         if await self._fill_field(f, ZIP_SELECTORS,     zip_code, "zip"):       any_filled = True
         if await self._fill_field(f, EMAIL_SELECTORS,   email,    "email"):     any_filled = True
 
-        # Phone: fill country code dropdown first (if present), then number field.
-        # If a country code dropdown was found and POP_BILLING_PHONE_NATIONAL is set,
-        # fill the number field with the national number only (no country prefix).
-        # Otherwise fall back to the full E.164 number for combined inputs.
-        phone_country_code = billing_info.get("phone_country_code", "")
-        phone_national     = billing_info.get("phone_national", "")
-        cc_filled = False
-        if phone_country_code:
-            cc_filled = await self._fill_field(
-                f, PHONE_COUNTRY_CODE_SELECTORS, phone_country_code, "phone country code"
-            )
-        phone_value = phone_national if (cc_filled and phone_national) else phone
-        if await self._fill_field(f, PHONE_SELECTORS, phone_value, "phone"):
-            any_filled = True
+        # Phone: auto-parse E.164 into country code + national number.
+        # If a country code dropdown exists, fill it with the numeric prefix (e.g. "+1");
+        # _select_option() fuzzy-matches against option text like "+1 United States".
+        # When the dropdown was found, fill the number input with the national number only.
+        # If no dropdown exists, fill the number input with the full E.164 — unchanged UX
+        # for forms that use a single combined input.
+        if phone:
+            cc, national = _parse_e164(phone)
+            cc_filled = False
+            if cc:
+                cc_filled = await self._fill_field(
+                    f, PHONE_COUNTRY_CODE_SELECTORS, cc, "phone country code"
+                )
+            phone_value = national if cc_filled else phone
+            if await self._fill_field(f, PHONE_SELECTORS, phone_value, "phone"):
+                any_filled = True
 
         return any_filled
 

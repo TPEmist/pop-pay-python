@@ -20,10 +20,8 @@ class LocalVaultProvider(VirtualCardProvider):
         self._billing_state      = os.getenv("POP_BILLING_STATE", "").strip()
         self._billing_country    = os.getenv("POP_BILLING_COUNTRY", "").strip()
         self._billing_zip        = os.getenv("POP_BILLING_ZIP", "").strip()
-        self._billing_email             = os.getenv("POP_BILLING_EMAIL", "").strip()
-        self._billing_phone             = os.getenv("POP_BILLING_PHONE", "").strip()
-        self._billing_phone_country_code = os.getenv("POP_BILLING_PHONE_COUNTRY_CODE", "").strip()
-        self._billing_phone_national    = os.getenv("POP_BILLING_PHONE_NATIONAL", "").strip()
+        self._billing_email = os.getenv("POP_BILLING_EMAIL", "").strip()
+        self._billing_phone = os.getenv("POP_BILLING_PHONE", "").strip()  # E.164, e.g. +14155551234
 
         if not all([self.card_number, self.exp_month, self.exp_year, self.cvv]):
             raise ValueError("Missing BYOC environment variables. Please check POP_BYOC_NUMBER, POP_BYOC_EXP_MONTH, POP_BYOC_EXP_YEAR, POP_BYOC_CVV in .env.")
@@ -39,10 +37,8 @@ class LocalVaultProvider(VirtualCardProvider):
             "state":      self._billing_state,
             "country":    self._billing_country,
             "zip":        self._billing_zip,
-            "email":              self._billing_email,
-            "phone":              self._billing_phone,
-            "phone_country_code": self._billing_phone_country_code,
-            "phone_national":     self._billing_phone_national,
+            "email": self._billing_email,
+            "phone": self._billing_phone,
         }
 
     async def issue_card(self, intent: PaymentIntent, policy: GuardrailPolicy) -> VirtualSeal:
