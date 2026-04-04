@@ -224,16 +224,15 @@ Point One Percent ships with two guardrail engines. You switch between them with
 
 ### Step 4: Use It
 
-Your agent now has access to three tools:
+Your agent now has access to two tools:
 
 | Tool | When to use |
 |---|---|
-| `page_snapshot` | **Before `request_virtual_card`** — scans the checkout page for prompt injection attacks. Returns ABORT if suspicious content is detected; result cached 5 minutes. |
 | `request_purchaser_info` | Billing/contact info page (name, email, phone, address) — no card fields visible yet |
-| `request_virtual_card` | Payment page — card fields are visible. Also fills billing fields if present on the same page. |
+| `request_virtual_card` | Payment page — card fields are visible. Prompt injection scan runs automatically inside this call. |
 
-**Single-page checkout** (e.g. Wikipedia donate): agent calls `page_snapshot` then `request_virtual_card`.
-**Two-page checkout** (e.g. billing info → payment): agent calls `page_snapshot`, then `request_purchaser_info`, then `request_virtual_card`.
+**Single-page checkout** (e.g. Wikipedia donate): agent calls `request_virtual_card`.
+**Two-page checkout** (e.g. billing info → payment): agent calls `request_purchaser_info` first, then `request_virtual_card`.
 
 When it encounters a paywall:
 
