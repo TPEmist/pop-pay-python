@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.17] - 2026-04-02
+## [0.6.19] - 2026-04-04
+
+### Added
+- **Screenshot Blackout Security (P1):** Added `_enable_blackout()` and `_disable_blackout()` methods to `PopBrowserInjector`. During credential injection (card or billing), a full-screen black overlay (`z-index: 999999`, `pointer-events: none`) is now applied to the browser viewport. Prevents screen recording or screenshot tools from capturing sensitive fields while they are being filled. Restoration is guaranteed via `finally` blocks.
+
+## [0.6.18] - 2026-04-03
+
+### Added
+- **P1: Page Snapshot Security Tool:** Added `@mcp.tool() page_snapshot(page_url)` to scan checkout pages for prompt injection signals (hidden text, zero-pixel elements, malicious instructions) before payment.
+- **Mandatory Snapshot Check (P1):** `request_virtual_card` now warns if no valid security snapshot (valid for 5 mins) is found for the `page_url`, encouraging a "scan-before-pay" workflow.
+- P3: Added webhook_url support to GuardrailPolicy for Slack/Teams/PagerDuty notifications
+- Docs: Added OpenClaw skill documentation at docs/openclaw-skill.md
 
 ### Fixed
 - **Vendor matching unified (`_match_vendor`):** Extracted shared `_match_vendor()` helper in `guardrails.py`. Both `GuardrailEngine.evaluate_intent()` and `request_purchaser_info` MCP tool now use the same logic — token-exact, token-in-allowed, token-subset, and page-domain fallback. Eliminates the prior divergence where a vendor could pass one gate but be rejected by the other.

@@ -184,7 +184,7 @@ Choose your platform and follow the dedicated setup guide:
 | **Claude Code** (BYOC + CDP injection, recommended) | [Integration Guide §1](./docs/INTEGRATION_GUIDE.md#1-claude-code--full-setup-with-cdp-injection) |
 | **Python script / gemini-cli** | [Integration Guide §2](./docs/INTEGRATION_GUIDE.md#2-gemini-cli--python-script-integration) |
 | **Playwright / browser-use / Skyvern** | [Integration Guide §3](./docs/INTEGRATION_GUIDE.md#3-browser-agent-middleware-playwright--browser-use--skyvern) |
-| **OpenClaw / NemoClaw** | [Integration Guide §4](./docs/INTEGRATION_GUIDE.md#4-openclaw--nemoclaw--system-prompt-configuration) |
+| **OpenClaw / NemoClaw** | [Integration Guide §4](./docs/INTEGRATION_GUIDE.md#4-openclaw--nemoclaw--system-prompt-configuration) / [OpenClaw Skill](./docs/openclaw-skill.md) |
 | **OpenHands** | Add `python -m pop_pay.mcp_server` to your `mcpServers` config |
 
 ### Step 4: Configure Policy
@@ -205,7 +205,7 @@ Edit `~/.config/pop-pay/.env` (see Step 1b). Key variables:
 | `POP_BILLING_PHONE_COUNTRY_CODE` | _(empty)_ | ISO code (`"US"`) or dial prefix (`"+1"`) — fills country code dropdown; national number auto-derived |
 | `POP_BILLING_STREET` / `POP_BILLING_CITY` / `POP_BILLING_STATE` / `POP_BILLING_COUNTRY` / `POP_BILLING_ZIP` | _(empty)_ | Auto-fill address fields; state and country matched fuzzily against dropdown options |
 | `POP_ALLOWED_PAYMENT_PROCESSORS` | `[]` | Extra third-party payment processor domains to trust (pop-pay ships with 20 built-in) |
-
+| `POP_WEBHOOK_URL` | _(empty)_ | Webhook URL for Slack/Teams/PagerDuty notifications |
 > **After editing `.env`, fully close and reopen Claude Code.** The MCP server loads configuration at startup — `!claude mcp list` alone is not sufficient to pick up `.env` changes.
 
 #### Guardrail Mode: Keyword vs LLM

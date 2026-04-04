@@ -6,6 +6,7 @@ class GuardrailPolicy(BaseModel):
     max_amount_per_tx: float = Field(..., gt=0, description="Max amount per transaction")
     max_daily_budget: float = Field(..., gt=0, description="Max daily budget")
     block_hallucination_loops: bool = Field(default=True, description="Whether to block potential hallucination loops")
+    webhook_url: Optional[str] = Field(default=None, description="Webhook URL for notifications")
 
 class PaymentIntent(BaseModel):
     agent_id: str = Field(..., description="ID of the AI agent requesting payment")

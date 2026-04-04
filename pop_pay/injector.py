@@ -466,14 +466,20 @@ class PopBrowserInjector:
 
                 await page.bring_to_front()
 
-                result["card_filled"] = await self._fill_across_frames(
-                    page, card_number, expiry, cvv
-                )
-
-                if has_billing:
-                    result["billing_filled"] = await self._fill_billing_fields(
-                        page, billing_info
+                # Enable screenshot blackout before filling sensitive info
+                await self._enable_blackout(page)
+                try:
+                    result["card_filled"] = await self._fill_across_frames(
+                        page, card_number, expiry, cvv
                     )
+
+                    if has_billing:
+                        result["billing_filled"] = await self._fill_billing_fields(
+                            page, billing_info
+                        )
+                finally:
+                    # Restore page visibility after injection
+                    await self._disable_blackout(page)
 
                 return result
 
@@ -822,7 +828,15 @@ class PopBrowserInjector:
                     return result
 
                 await page.bring_to_front()
-                result["billing_filled"] = await self._fill_billing_fields(page, billing_info)
+
+                # Enable screenshot blackout
+                await self._enable_blackout(page)
+                try:
+                    result["billing_filled"] = await self._fill_billing_fields(page, billing_info)
+                finally:
+                    # Restore page visibility
+                    await self._disable_blackout(page)
+
                 return result
 
         except Exception as exc:
@@ -835,6 +849,38 @@ class PopBrowserInjector:
                 except Exception:
                     pass
 
+    @staticmethod 
+    async def _enable_blackout(page): 
+        """ 
+        Inject a full-screen black overlay to hide payment fields from screenshots. 
+        Also disables pointer events to prevent interaction during injection. 
+        """ 
+        try: 
+            await page.evaluate("""() => { 
+                if (document.getElementById("pop-pay-blackout")) return; 
+                const overlay = document.createElement("div"); 
+                overlay.id = "pop-pay-blackout"; 
+                overlay.style.cssText = "position:fixed; top:0; left:0; bottom:0; right:0; background:#000; z-index:999999;"; 
+                document.documentElement.appendChild(overlay); 
+                document.documentElement.style.pointerEvents = "none"; 
+            }""") 
+        except Exception as e: 
+            logger.debug("PopBrowserInjector: failed to enable blackout: %s", e) 
+ 
+    @staticmethod 
+    async def _disable_blackout(page): 
+        """ 
+        Remove the blackout overlay and restore pointer events. 
+        """ 
+        try: 
+            await page.evaluate("""() => { 
+                const overlay = document.getElementById("pop-pay-blackout"); 
+                if (overlay) overlay.remove(); 
+                document.documentElement.style.pointerEvents = ""; 
+            }""") 
+        except Exception as e: 
+            logger.debug("PopBrowserInjector: failed to disable blackout: %s", e) 
+ 
     @staticmethod
     async def _find_visible_locator(frame, selectors: list):
         """
