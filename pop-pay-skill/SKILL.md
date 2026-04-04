@@ -1,7 +1,7 @@
 ---
 name: pop-pay
 version: "0.6.18"
-description: "Your card stays in your local vault — no SaaS, no login, no external account. pop-pay injects credentials directly into checkout forms via CDP, keeping them out of the AI's context window entirely."
+description: "Your card stays in your local vault — no SaaS, no login, no external account. pop-pay injects credentials directly into checkout forms via CDP (Chrome DevTools Protocol), keeping them out of the AI's context window entirely."
 homepage: https://github.com/TPEmist/Point-One-Percent
 author: Point One Percent
 license: MIT
