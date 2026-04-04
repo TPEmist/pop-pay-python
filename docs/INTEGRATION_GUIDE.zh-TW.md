@@ -522,7 +522,15 @@ class POPCheckoutInterceptor:
 
 ## 4. OpenClaw / NemoClaw — 完整設定
 
-OpenClaw 與 NemoClaw 均原生支援 MCP，並使用 Chrome DevTools Protocol（CDP）進行瀏覽器自動化——與 §1 的 Claude Code 設定幾乎完全相同。
+pop-pay 是一個獨立運行在本機的 MCP 伺服器，負責守衛 Agent 的支付行為。對於 OpenClaw 用戶，ClawHub 上的「skill」是發現層與設定層，負責告訴你的 Agent 如何與本機的 pop-pay 伺服器溝通。你必須先安裝 `pop-pay` Python 套件，再透過 `openclaw` 加入 skill，Agent 才能取用支付工具。這樣的架構確保支付邏輯安全地在你的機器上執行，同時讓 Agent 能透過標準的工具呼叫介面發起付款請求。
+
+### ClawHub Skill（最快設定方式）
+
+pop-pay 已在 **ClawHub**（OpenClaw / NemoClaw 的 skill 市集）上架，可一鍵安裝。搜尋 Point One Percent 發布的 **"pop-pay"** skill。該 skill 內含 MCP 註冊、預設消費 policy，以及下方的 system prompt 片段——單次點擊即完成設定。
+
+若偏好完全手動控制，請繼續閱讀下方的手動設定說明。
+
+---
 
 ### 推薦的 System Prompt 片段
 
@@ -590,6 +598,50 @@ openclaw mcp add playwright -- npx @playwright/mcp@latest --cdp-endpoint http://
 ```
 
 > 更新 `.env` 後，重啟 OpenClaw session 即可重新載入設定——不需要重新註冊 MCP。
+
+---
+
+### 支付流程
+
+```
++------------------+     +----------------------+     +---------------------------+
+| Agent 導航至     | --> | 顯示帳單表單          |     | 顯示支付表單              |
+| 結帳頁面         |     | （姓名、地址欄位）     |     | （信用卡欄位）             |
++------------------+     +----------------------+     +---------------------------+
+                                   |                              |
+                       呼叫 request_purchaser_info()   呼叫 request_virtual_card()
+                       （填入姓名、地址、Email）        - 自動掃描頁面，內建於請求中
+                                   |                     - 透過 CDP 注入卡片
+                                   v                              |
+                            點擊「繼續 / 下一步」                  v
+                                                         點擊「送出 / 確認訂單」
+```
+
+### 第一次實測
+
+使用 Wikipedia 捐款頁面——流程簡單，無需登入帳號。
+
+```bash
+> Donate $10 to Wikipedia, with credit card, pay with pop-pay. Fill in the payment details, but **do not submit** — I will review and confirm before proceeding.
+```
+
+1. Agent 導航至 `https://donate.wikimedia.org`，選擇 $10，選擇「信用卡」，進入填寫付款資訊的頁面。
+
+2. 在帳單資料頁，Agent 呼叫：
+   ```
+   request_purchaser_info(target_vendor="Wikipedia", page_url="...", reasoning="...")
+   ```
+   然後點擊「繼續」。
+
+3. 在支付頁面，Agent 呼叫：
+   ```
+   request_virtual_card(requested_amount=10.0, target_vendor="Wikipedia", reasoning="...", page_url="...")
+   ```
+   pop-pay 自動掃描頁面是否有提示注入，確認後透過 CDP 注入卡片資料。
+
+4. Agent 點擊送出。初次測試時，在 prompt 中加入 `「請勿送出表單」`，方便你在任何款項被扣款前先檢查已填入的欄位。
+
+**預期流程：** Agent 導航 → 選擇 $10 → 進入卡片表單 → 呼叫 `request_virtual_card` → pop-pay 掃描頁面並透過 CDP 注入卡片 → Agent 等待確認。
 
 ---
 

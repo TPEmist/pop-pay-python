@@ -1,6 +1,6 @@
 ---
 name: pop-pay
-version: "0.6.19"
+version: "0.6.20"
 description: "Your card stays in your local vault — no SaaS, no login, no external account. pop-pay injects credentials directly into checkout forms via CDP (Chrome DevTools Protocol), keeping them out of the AI's context window entirely."
 homepage: https://github.com/TPEmist/Point-One-Percent
 author: Point One Percent
@@ -12,6 +12,11 @@ requires:
     - POP_ALLOWED_CATEGORIES
     - POP_MAX_AMOUNT_PER_TX
     - POP_MAX_DAILY_BUDGET
+    - POP_AUTO_INJECT
+    - POP_REQUIRE_HUMAN_APPROVAL
+    - POP_GUARDRAIL_ENGINE
+    - POP_WEBHOOK_URL
+    - POP_LLM_API_KEY
 ---
 
 ## What This Skill Does
@@ -42,6 +47,7 @@ All payment logic runs **on your machine**. There are no Point One Percent serve
 ## Setup (One Time)
 
 ```bash
+# Install from PyPI (https://pypi.org/project/pop-pay/)
 pip install pop-pay
 pop-pay setup          # securely stores your card in the system keychain
 pop-pay setup --profile   # stores billing info (name, address, email)
@@ -66,7 +72,8 @@ Set your spend policy in `~/.config/pop-pay/.env`:
 POP_ALLOWED_CATEGORIES=["amazon","shopify","aws"]
 POP_MAX_AMOUNT_PER_TX=100
 POP_MAX_DAILY_BUDGET=300
-POP_AUTO_INJECT=true
+POP_AUTO_INJECT=true          # set to false to review injections manually
+POP_REQUIRE_HUMAN_APPROVAL=false  # set to true for manual confirmation on every payment
 ```
 
 ---
