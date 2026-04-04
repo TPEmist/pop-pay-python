@@ -1,6 +1,6 @@
 ---
 name: pop-pay
-version: 0.6.18
+version: "0.6.18"
 description: Payment guardrail for AI agents — injects card via CDP, never exposes it to the agent context. Semantic spend policy + prompt-injection resistance.
 homepage: https://github.com/TPEmist/Point-One-Percent
 author: Point One Percent
