@@ -1,7 +1,7 @@
 ---
 name: pop-pay
-version: "0.6.21"
-description: "Your card stays in your local vault — no SaaS, no login, no external account. pop-pay injects credentials directly into checkout forms via CDP (Chrome DevTools Protocol), keeping them out of the AI's context window entirely."
+version: "0.6.22"
+description: "Your card stays on your PC — no SaaS, no login, no external account. Credentials inject directly, keeping them out of the AI's context window."
 homepage: https://github.com/TPEmist/Point-One-Percent
 author: Point One Percent
 license: MIT
@@ -21,7 +21,7 @@ requires:
 
 Gives your OpenClaw agent the ability to pay at any online store using **your own existing credit card** — no account to create, no SaaS subscription, no external service to trust.
 
-Your card number is stored in your **local system keychain** and is **never placed in the agent's context window**. When payment is approved, credentials are injected directly into the browser's payment form via Chrome DevTools Protocol (CDP) in a separate process — the agent never sees them. If your agent is compromised by a prompt injection attack, the attacker cannot steal your card.
+Your card number is stored in your **OS-level credential store** and is **never placed in the agent's context window**. When payment is approved, credentials are injected directly into the browser's payment form via CDP (Chrome DevTools Protocol — an open protocol maintained by Google) in a separate process — the agent never sees them. If your agent is compromised by a prompt injection attack, the attacker cannot steal your card.
 
 ---
 
@@ -31,7 +31,7 @@ All payment logic runs **on your machine**. There are no Point One Percent serve
 
 | Component | Default | Data stays |
 |---|---|---|
-| Card credentials | Local system keychain | Your machine only |
+| Card credentials | OS-level credential store | Your machine only |
 | Spend policy | `~/.config/pop-pay/.env` | Your machine only |
 | Guardrail engine | `keyword` mode (zero API calls) | Your machine only |
 | Guardrail engine (optional) | `llm` mode — uses your own API key | Your API provider |
@@ -47,7 +47,7 @@ All payment logic runs **on your machine**. There are no Point One Percent serve
 ```bash
 # Install from PyPI (https://pypi.org/project/pop-pay/)
 pip install pop-pay
-pop-pay setup          # securely stores your card in the system keychain
+pop-pay setup          # securely stores your card in the OS-level credential store
 pop-pay setup --profile   # stores billing info (name, address, email)
 ```
 
@@ -145,7 +145,7 @@ Agent clicks "Checkout" / "Proceed to payment"
 | Property | pop-pay |
 |---|---|
 | Card number in agent context | Never |
-| Stored locally (no external account) | Yes — system keychain |
+| Stored locally (no external account) | Yes — OS credential store |
 | Works with existing credit card | Yes |
 | Works with any merchant | Yes (any checkout form) |
 | No SaaS / no login required | Yes |
