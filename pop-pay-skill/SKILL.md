@@ -1,7 +1,7 @@
 ---
 name: pop-pay
 version: "0.6.18"
-description: Payment guardrail for AI agents — injects card via CDP, never exposes it to the agent context. Semantic spend policy + prompt-injection resistance.
+description: "Your card stays in your local vault — no SaaS, no login, no external account. pop-pay injects credentials directly into checkout forms via CDP, keeping them out of the AI's context window entirely."
 homepage: https://github.com/TPEmist/Point-One-Percent
 author: Point One Percent
 license: MIT
@@ -16,9 +16,26 @@ requires:
 
 ## What This Skill Does
 
-Gives your OpenClaw agent the ability to pay at any online store—using **your own credit card**, with no crypto, no proxy wallet, and no funds to pre-load.
+Gives your OpenClaw agent the ability to pay at any online store using **your own existing credit card** — no account to create, no SaaS subscription, no external service to trust.
 
-The card number is **never placed in the agent's context window**. It is injected directly into the browser's payment form via Chrome DevTools Protocol (CDP) in a separate process. If your agent is compromised by a prompt injection attack, the attacker cannot steal your card—they cannot see it.
+Your card number is stored in your **local system keychain** and is **never placed in the agent's context window**. When payment is approved, credentials are injected directly into the browser's payment form via Chrome DevTools Protocol (CDP) in a separate process — the agent never sees them. If your agent is compromised by a prompt injection attack, the attacker cannot steal your card.
+
+---
+
+## Privacy & Data Flow
+
+All payment logic runs **on your machine**. There are no Point One Percent servers involved in the payment path.
+
+| Component | Default | Data stays |
+|---|---|---|
+| Card credentials | Local system keychain | Your machine only |
+| Spend policy | `~/.config/pop-pay/.env` | Your machine only |
+| Guardrail engine | `keyword` mode (zero API calls) | Your machine only |
+| Guardrail engine (optional) | `llm` mode — uses your own API key | Your API provider |
+| Webhook notifications | **Disabled by default** — only active if `POP_WEBHOOK_URL` is set | Your chosen endpoint |
+
+**Keyword guardrail** (default): evaluates transactions locally with no external calls.
+**LLM guardrail** (opt-in): uses your own `POP_LLM_API_KEY` — no data is sent to Point One Percent.
 
 ---
 
@@ -50,8 +67,6 @@ POP_ALLOWED_CATEGORIES=["amazon","shopify","aws"]
 POP_MAX_AMOUNT_PER_TX=100
 POP_MAX_DAILY_BUDGET=300
 POP_AUTO_INJECT=true
-# Optional: get Slack/webhook notifications on every transaction
-POP_WEBHOOK_URL=https://hooks.slack.com/your-hook-here
 ```
 
 ---
@@ -60,7 +75,7 @@ POP_WEBHOOK_URL=https://hooks.slack.com/your-hook-here
 
 ### `request_purchaser_info`
 
-**When to call**: You are on a contact/billing info page with fields for name, email, phone, or address—but no credit card fields are visible yet.
+**When to call**: You are on a contact/billing info page with fields for name, email, phone, or address — but no credit card fields are visible yet.
 
 ```
 request_purchaser_info(
@@ -89,9 +104,10 @@ request_virtual_card(
 )
 ```
 
-- Evaluates the purchase against the user's spend policy (amount limits, category allowlist)
-- Runs a semantic guardrail: the LLM evaluates whether this purchase **should** happen given your agent's current task context—not just whether it **can** (within budget)
-- If approved, the card number, CVV, and expiry are injected directly into the browser form via CDP—never passed to the agent
+- Evaluates the purchase against the user's spend policy (amount limits, allowlist)
+- Runs a guardrail check: evaluates whether this purchase **should** happen given the agent's current task context — not just whether it **can** (within budget)
+- Automatically scans the checkout page for prompt injection attacks before issuing the card
+- If approved, credentials are injected directly into the browser form via CDP — never passed to the agent
 - Returns: `approved` (with last 4 digits) or `rejected` (with reason)
 
 **After approval**: Click the submit/pay button. The card has been filled automatically.
@@ -111,6 +127,7 @@ Agent clicks "Checkout" / "Proceed to payment"
   ↓
 [When payment/card fields are visible]
   → call request_virtual_card(amount, vendor, reasoning, page_url)
+     (security scan runs automatically inside this call)
   ↓
 [If approved]
   → click Submit / Place Order
@@ -120,30 +137,32 @@ Agent clicks "Checkout" / "Proceed to payment"
 
 ## Security Model
 
-| Property | pop-pay | Proxy wallet (e.g. Lobster.cash) |
-|---|---|---|
-| Card number in agent context | Never | Never |
-| Requires crypto / stable coin | No | Yes (USDC) |
-| Works with existing credit card | Yes | No (requires funded wallet) |
-| Works with any merchant | Yes (any form) | Only Visa TAP merchants |
-| Semantic guardrail (SHOULD vs CAN) | Yes | No |
-| Prompt injection scan before payment | Yes | No |
-| Open source / auditable | MIT | Varies |
+| Property | pop-pay |
+|---|---|
+| Card number in agent context | Never |
+| Stored locally (no external account) | Yes — system keychain |
+| Works with existing credit card | Yes |
+| Works with any merchant | Yes (any checkout form) |
+| No SaaS / no login required | Yes |
+| Guardrail (SHOULD vs CAN) | Yes — keyword or LLM mode |
+| Prompt injection scan on every payment | Yes — automatic |
+| Open source / auditable | MIT |
 
-**Prompt injection resistance**: Because the card is injected by a separate process (CDP injector) that only activates after guardrail approval, a malicious merchant cannot steal the card via hidden DOM instructions—the agent never had the card to give away.
+**Prompt injection resistance**: The card is injected by a separate local process (CDP injector) that activates only after guardrail approval. A malicious merchant cannot steal the card via hidden DOM instructions — the agent never had it.
 
 ---
 
 ## Spend Policy Reference
 
-| Env var | Description | Example |
+| Env var | Default | Description |
 |---|---|---|
-| `POP_ALLOWED_CATEGORIES` | JSON array of allowed vendor keywords | `["amazon","cloudflare","aws"]` |
-| `POP_MAX_AMOUNT_PER_TX` | Max per transaction (USD) | `100` |
-| `POP_MAX_DAILY_BUDGET` | Max total spend per day (USD) | `300` |
-| `POP_REQUIRE_HUMAN_APPROVAL` | Always require human confirmation | `false` |
-| `POP_AUTO_INJECT` | Enable CDP auto-injection | `true` |
-| `POP_WEBHOOK_URL` | POST notification URL (Slack/Teams/PagerDuty) | `https://hooks.slack.com/...` |
+| `POP_ALLOWED_CATEGORIES` | `[]` | JSON array of allowed vendor keywords |
+| `POP_MAX_AMOUNT_PER_TX` | required | Max per transaction (USD) |
+| `POP_MAX_DAILY_BUDGET` | required | Max total spend per day (USD) |
+| `POP_GUARDRAIL_ENGINE` | `keyword` | `keyword` (local, zero API cost) or `llm` (semantic, needs API key) |
+| `POP_REQUIRE_HUMAN_APPROVAL` | `false` | Always require human confirmation before payment |
+| `POP_AUTO_INJECT` | `true` | Enable CDP auto-injection into checkout forms |
+| `POP_WEBHOOK_URL` | _(disabled)_ | Optional: POST notifications to Slack/Teams/PagerDuty |
 
 ---
 
@@ -162,15 +181,14 @@ result = request_purchaser_info(
 )
 # → Billing info injected. Click Continue.
 
-# Step 3: On payment page
-# Security scan runs automatically inside request_virtual_card when page_url is provided
+# Step 3: On payment page — security scan runs automatically inside this call
 result = request_virtual_card(
     requested_amount=43.99,
     target_vendor="Amazon",
     reasoning="Purchasing USB-C hub for home office setup as instructed by user",
     page_url="https://www.amazon.com/checkout/payment"
 )
-# → Approved. Card injected. Click "Place your order".
+# → Approved. Card injected via CDP. Click "Place your order".
 ```
 
 ---
