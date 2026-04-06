@@ -5,16 +5,12 @@
 </p>
 
 # Point One Percent — pop-pay
+<p align="left"><i>it only takes <b>0.1%</b> of Hallucination to drain <b>100%</b> of your wallet.</i></p>
 
-<p align="center">
-  <a href="https://glama.ai/mcp/servers/TPEmist/Point-One-Percent"><img src="https://glama.ai/mcp/servers/TPEmist/Point-One-Percent/badges/score.svg" alt="Glama MCP score"></a>
-  &nbsp;&nbsp;
-  <a href="https://www.producthunt.com/products/project-aegis?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-point-one-percent-ai-agent-pay" target="_blank" rel="noopener noreferrer"><img alt="Point One Percent on Product Hunt" width="140" height="30" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1105745&theme=neutral&t=1774937261413"></a>
-</p>
 
 ### The runtime security layer for AI agent commerce.
 
-<p align="center"><i>it only takes <b>0.1%</b> of Hallucination to drain <b>100%</b> of your wallet.</i></p>
+
 
 > Your card never enters the agent's context. One hallucinated prompt can't drain a wallet it can't see.
 
