@@ -679,74 +679,110 @@ class PopBrowserInjector:
 
     async def _select_option(self, locator, value: str) -> bool:
         """
-        Select a <select> option using Playwright's native select_option().
+        Select a <select> option reliably across frameworks.
 
-        Tries in order:
-        1. Exact value match
-        2. Exact label match
-        3. Fuzzy match (scan options, select by matched value)
-
-        After each successful selection, dispatches change/input/blur events
-        for framework compatibility (React, Angular, Vue, Zoho).
+        Approach:
+        1. Scan options to find the best match (exact value → exact text → partial)
+        2. Try Playwright's native select_option() first
+        3. Verify the value actually stuck (some frameworks override the setter)
+        4. If mismatch, fall back to JS native setter trick + comprehensive events
+           (bypasses React/Angular/Zoho/Vue framework interception)
         """
-        # 1. Exact value match
-        try:
-            await locator.select_option(value=value)
-            await self._dispatch_events(locator)
-            logger.info("PopBrowserInjector: select_option matched value='%s'.", value)
-            return True
-        except Exception as exc:
-            logger.debug("PopBrowserInjector: select_option(value='%s') failed: %s", value, exc)
-
-        # 2. Exact label match
-        try:
-            await locator.select_option(label=value)
-            await self._dispatch_events(locator)
-            logger.info("PopBrowserInjector: select_option matched label='%s'.", value)
-            return True
-        except Exception as exc:
-            logger.debug("PopBrowserInjector: select_option(label='%s') failed: %s", value, exc)
-
-        # 3. Fuzzy match: scan all options, find best match, select by value
+        # Step 1: Find the matching option value
         try:
             options = await locator.evaluate(
                 "el => Array.from(el.options).map(o => ({value: o.value, text: o.text.trim()}))"
             )
-            value_lower = value.lower()
-            matched_value = None
+        except Exception as exc:
+            logger.warning("PopBrowserInjector: could not read <select> options: %s", exc)
+            return False
 
-            # Exact case-insensitive
+        value_lower = value.lower()
+        matched_value = None
+
+        # Exact value match
+        for opt in options:
+            if opt["value"].lower() == value_lower:
+                matched_value = opt["value"]
+                break
+        # Exact text match
+        if not matched_value:
             for opt in options:
-                if value_lower in (opt["text"].lower(), opt["value"].lower()):
+                if opt["text"].lower() == value_lower:
                     matched_value = opt["value"]
                     break
-            # Partial match
-            if not matched_value:
-                for opt in options:
-                    opt_text = opt["text"].lower()
-                    opt_val = opt["value"].lower()
-                    if (value_lower in opt_text or opt_text in value_lower or
-                            value_lower in opt_val or opt_val in value_lower):
-                        if opt["value"]:  # skip empty placeholder options
-                            matched_value = opt["value"]
-                            break
+        # Partial match
+        if not matched_value:
+            for opt in options:
+                opt_text = opt["text"].lower()
+                opt_val = opt["value"].lower()
+                if (value_lower in opt_text or opt_text in value_lower or
+                        value_lower in opt_val or opt_val in value_lower):
+                    if opt["value"]:
+                        matched_value = opt["value"]
+                        break
 
-            if matched_value:
-                await locator.select_option(value=matched_value)
-                await self._dispatch_events(locator)
-                logger.info(
-                    "PopBrowserInjector: select_option fuzzy matched '%s' → value='%s'.",
-                    value, matched_value,
-                )
+        if not matched_value:
+            logger.warning(
+                "PopBrowserInjector: no option matched '%s' in %d options. First 5: %s",
+                value, len(options), options[:5],
+            )
+            return False
+
+        logger.debug("PopBrowserInjector: matched '%s' → option value='%s'.", value, matched_value)
+
+        # Step 2: Try Playwright native select_option
+        try:
+            await locator.select_option(value=matched_value)
+        except Exception as exc:
+            logger.debug("PopBrowserInjector: native select_option failed: %s", exc)
+
+        # Step 3: Verify the value stuck
+        try:
+            actual = await locator.evaluate("el => el.value")
+        except Exception:
+            actual = None
+
+        if actual == matched_value:
+            await self._dispatch_events(locator)
+            logger.info("PopBrowserInjector: select_option native success → '%s'.", matched_value)
+            return True
+
+        # Step 4: Native setter trick — bypasses React/Angular/Zoho/Vue interception
+        logger.debug(
+            "PopBrowserInjector: native select_option set value='%s' but read back='%s'. "
+            "Trying JS native setter fallback.",
+            matched_value, actual,
+        )
+        try:
+            success = await locator.evaluate("""(el, val) => {
+                // Use the native HTMLSelectElement.prototype setter to bypass
+                // framework interceptions (React, Angular, Zoho, Vue).
+                const nativeSetter = Object.getOwnPropertyDescriptor(
+                    HTMLSelectElement.prototype, 'value'
+                ).set;
+                nativeSetter.call(el, val);
+
+                // Fire comprehensive event chain
+                el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+                el.dispatchEvent(new FocusEvent('focus', { bubbles: false }));
+                el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                el.dispatchEvent(new FocusEvent('blur', { bubbles: false }));
+                el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+
+                return el.value === val;
+            }""", matched_value)
+            if success:
+                logger.info("PopBrowserInjector: select_option JS native setter success → '%s'.", matched_value)
                 return True
             else:
-                logger.warning(
-                    "PopBrowserInjector: no option matched '%s' in %d options. "
-                    "First 5 options: %s",
-                    value, len(options), options[:5],
-                )
+                logger.warning("PopBrowserInjector: JS native setter failed for '%s'.", matched_value)
         except Exception as exc:
-            logger.warning("PopBrowserInjector: select_option fuzzy scan failed: %s", exc)
+            logger.warning("PopBrowserInjector: JS native setter error: %s", exc)
 
         return False
 
@@ -765,10 +801,39 @@ class PopBrowserInjector:
             logger.warning("PopBrowserInjector: no element found for '%s'. Tried %d selectors.", field_name, len(selectors))
             return False
         try:
-            tag = await locator.evaluate("el => el.tagName.toLowerCase()")
-            logger.debug("PopBrowserInjector: found <%s> for '%s', value='%s'.", tag, field_name, value)
+            el_info = await locator.evaluate("""el => ({
+                tag: el.tagName.toLowerCase(),
+                name: el.name || '',
+                id: el.id || '',
+                visible: el.offsetParent !== null,
+                frame: window.location.href,
+                optionCount: el.tagName === 'SELECT' ? el.options.length : 0,
+                currentValue: el.value,
+            })""")
+            tag = el_info["tag"]
+            logger.info(
+                "PopBrowserInjector: [%s] found <%s name='%s' id='%s'> visible=%s options=%d currentValue='%s' frame=%s → setting to '%s'",
+                field_name, tag, el_info["name"], el_info["id"],
+                el_info["visible"], el_info["optionCount"], el_info["currentValue"],
+                el_info["frame"], value,
+            )
             if tag == "select":
                 filled = await self._select_option(locator, value)
+                # Verify: read back value after select_option
+                after_value = await locator.evaluate("el => el.value")
+                if filled and not after_value:
+                    logger.warning(
+                        "PopBrowserInjector: [%s] BUG — select_option returned True but el.value is EMPTY. "
+                        "visible=%s, name='%s', optionCount=%d",
+                        field_name, el_info["visible"], el_info["name"], el_info["optionCount"],
+                    )
+                    # Override: report as failed with diagnostic detail
+                    self._last_select_diag = (
+                        f"select_option ok but value empty after; "
+                        f"visible={el_info['visible']}, name={el_info['name']}, "
+                        f"options={el_info['optionCount']}, frame={el_info['frame']}"
+                    )
+                    filled = False
             else:
                 await locator.fill(value)
                 await self._dispatch_events(locator)
@@ -812,10 +877,15 @@ class PopBrowserInjector:
             if not value:
                 skipped.append(name)
                 return
+            self._last_select_diag = None
             if await self._fill_field(f, selectors, value, name):
                 filled.append(name)
             else:
-                failed.append(f"{name} (value='{value}')")
+                diag = self._last_select_diag or ""
+                detail = f"{name} (value='{value}')"
+                if diag:
+                    detail += f" [{diag}]"
+                failed.append(detail)
 
         await _try(FIRST_NAME_SELECTORS, first_name, "first_name")
         await _try(LAST_NAME_SELECTORS, last_name, "last_name")
