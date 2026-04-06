@@ -677,83 +677,74 @@ class PopBrowserInjector:
 
     async def _select_option(self, locator, value: str) -> bool:
         """
-        Select a <select> option by value, label, or fuzzy match.
+        Select a <select> option using Playwright's native select_option().
 
-        PRIMARY approach: JavaScript-based selection with full event chain.
-        Playwright's select_option() silently fails on some frameworks (Zoho,
-        custom React/Angular) when connected via CDP to an existing browser.
-        Using JS evaluate() is more reliable across frameworks.
+        Tries in order:
+        1. Exact value match
+        2. Exact label match
+        3. Fuzzy match (scan options, select by matched value)
 
-        Matching order:
-        1. Exact value match (case-insensitive)
-        2. Exact label/text match (case-insensitive)
-        3. Partial match (value contained in text or vice versa)
+        After each successful selection, dispatches change/input/blur events
+        for framework compatibility (React, Angular, Vue, Zoho).
         """
+        # 1. Exact value match
         try:
-            set_result = await locator.evaluate("""(el, val) => {
-                const valLower = val.toLowerCase();
-
-                // Build match candidates in priority order
-                let bestMatch = null;
-
-                for (const opt of el.options) {
-                    const optVal = opt.value.toLowerCase();
-                    const optText = opt.text.trim().toLowerCase();
-
-                    // Priority 1: exact value match
-                    if (optVal === valLower) { bestMatch = opt.value; break; }
-                    // Priority 2: exact text match
-                    if (optText === valLower) { bestMatch = opt.value; break; }
-                }
-
-                // Priority 3: partial match (only if no exact match)
-                if (!bestMatch) {
-                    for (const opt of el.options) {
-                        const optVal = opt.value.toLowerCase();
-                        const optText = opt.text.trim().toLowerCase();
-                        if (optText.includes(valLower) || valLower.includes(optText) ||
-                            optVal.includes(valLower) || valLower.includes(optVal)) {
-                            if (opt.value) { bestMatch = opt.value; break; }
-                        }
-                    }
-                }
-
-                if (!bestMatch) return false;
-
-                // Set the value
-                el.value = bestMatch;
-
-                // Fire comprehensive event chain for framework compatibility
-                // (React, Angular, Vue, Zoho, Salesforce, etc.)
-                el.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-                el.dispatchEvent(new FocusEvent('focus', { bubbles: false }));
-                el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-                el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-                el.dispatchEvent(new FocusEvent('blur', { bubbles: false }));
-                el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-
-                return true;
-            }""", value)
-            if set_result:
-                logger.info("PopBrowserInjector: select option set to '%s' via JS.", value)
-                return True
+            await locator.select_option(value=value)
+            await self._dispatch_events(locator)
+            logger.info("PopBrowserInjector: select_option matched value='%s'.", value)
+            return True
         except Exception as exc:
-            logger.debug("PopBrowserInjector: JS select failed: %s", exc)
+            logger.debug("PopBrowserInjector: select_option(value='%s') failed: %s", value, exc)
 
-        # Fallback: Playwright native select_option (works when JS approach fails)
-        for attempt_fn in [
-            lambda: locator.select_option(value=value),
-            lambda: locator.select_option(label=value),
-        ]:
-            try:
-                await attempt_fn()
+        # 2. Exact label match
+        try:
+            await locator.select_option(label=value)
+            await self._dispatch_events(locator)
+            logger.info("PopBrowserInjector: select_option matched label='%s'.", value)
+            return True
+        except Exception as exc:
+            logger.debug("PopBrowserInjector: select_option(label='%s') failed: %s", value, exc)
+
+        # 3. Fuzzy match: scan all options, find best match, select by value
+        try:
+            options = await locator.evaluate(
+                "el => Array.from(el.options).map(o => ({value: o.value, text: o.text.trim()}))"
+            )
+            value_lower = value.lower()
+            matched_value = None
+
+            # Exact case-insensitive
+            for opt in options:
+                if value_lower in (opt["text"].lower(), opt["value"].lower()):
+                    matched_value = opt["value"]
+                    break
+            # Partial match
+            if not matched_value:
+                for opt in options:
+                    opt_text = opt["text"].lower()
+                    opt_val = opt["value"].lower()
+                    if (value_lower in opt_text or opt_text in value_lower or
+                            value_lower in opt_val or opt_val in value_lower):
+                        if opt["value"]:  # skip empty placeholder options
+                            matched_value = opt["value"]
+                            break
+
+            if matched_value:
+                await locator.select_option(value=matched_value)
                 await self._dispatch_events(locator)
+                logger.info(
+                    "PopBrowserInjector: select_option fuzzy matched '%s' → value='%s'.",
+                    value, matched_value,
+                )
                 return True
-            except Exception:
-                pass
+            else:
+                logger.warning(
+                    "PopBrowserInjector: no option matched '%s' in %d options. "
+                    "First 5 options: %s",
+                    value, len(options), options[:5],
+                )
+        except Exception as exc:
+            logger.warning("PopBrowserInjector: select_option fuzzy scan failed: %s", exc)
 
         return False
 
@@ -769,9 +760,11 @@ class PopBrowserInjector:
             return False
         locator = await self._find_visible_locator(frame, selectors)
         if not locator:
+            logger.warning("PopBrowserInjector: no element found for '%s'. Tried %d selectors.", field_name, len(selectors))
             return False
         try:
             tag = await locator.evaluate("el => el.tagName.toLowerCase()")
+            logger.debug("PopBrowserInjector: found <%s> for '%s', value='%s'.", tag, field_name, value)
             if tag == "select":
                 filled = await self._select_option(locator, value)
             else:
@@ -780,9 +773,11 @@ class PopBrowserInjector:
                 filled = True
             if filled:
                 logger.info("PopBrowserInjector: %s injected.", field_name)
+            else:
+                logger.warning("PopBrowserInjector: %s — element found but selection failed.", field_name)
             return filled
         except Exception as exc:
-            logger.debug("PopBrowserInjector: could not fill %s: %s", field_name, exc)
+            logger.warning("PopBrowserInjector: could not fill %s: %s", field_name, exc)
             return False
 
     async def _fill_billing_fields(self, page, billing_info: dict) -> bool:

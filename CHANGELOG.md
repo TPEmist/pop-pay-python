@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.27] - 2026-04-06
+
+### Fixed
+- **Select dropdown: revert to Playwright-native `select_option()`** — JS evaluate approach was overfit. Confirmed Playwright's `select_option()` works correctly over CDP. Root cause still under investigation (likely selector matching or timing). Added diagnostic logging to `_fill_field` and `_select_option` to identify the exact failure point on next test run.
+
 ## [0.6.26] - 2026-04-06
 
 ### Fixed
