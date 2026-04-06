@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.32] - 2026-04-06
+
+### Fixed
+- **Select dropdown — use `get_by_label()` as primary locator:** Root cause confirmed: CSS selector `select[name='state']` finds the element and sets the DOM value, but Zoho's framework UI doesn't update. Playwright MCP's own approach uses accessibility-based `page.getByLabel('State')` which works correctly. Fix: for `<select>` elements, try `get_by_label()` first (matching Playwright MCP's behavior), fall back to CSS selectors. Changed billing field search context from `page.main_frame` to `page` to enable accessibility tree resolution.
+
 ## [0.6.31] - 2026-04-06
 
 ### Fixed

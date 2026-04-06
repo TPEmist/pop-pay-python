@@ -792,61 +792,53 @@ class PopBrowserInjector:
         return False
 
     async def _fill_field(
-        self, frame, selectors: list, value: str, field_name: str
+        self, page_or_frame, selectors: list, value: str, field_name: str,
+        *, label: str = "",
     ) -> bool:
         """
         Fill a billing field that may be either <input> or <select>.
-        Detects the tag at runtime — no separate handling needed per field type.
-        Returns True if the field was filled/selected.
+
+        For <select> elements, tries accessibility-based locator (get_by_label)
+        first — this is what Playwright's own MCP uses and is more reliable for
+        framework-controlled selects (Zoho, React, etc.). Falls back to CSS
+        selector if no label is provided or get_by_label doesn't match.
+
+        For <input> elements, uses CSS selectors via _find_visible_locator.
         """
         if not value:
             return False
-        locator = await self._find_visible_locator(frame, selectors)
+
+        # --- Strategy 1 (selects): try get_by_label first ---
+        if label:
+            try:
+                label_locator = page_or_frame.get_by_label(label)
+                if await label_locator.count() > 0:
+                    tag = await label_locator.first.evaluate("el => el.tagName.toLowerCase()")
+                    if tag == "select":
+                        filled = await self._select_option(label_locator.first, value)
+                        if filled:
+                            logger.info("PopBrowserInjector: %s injected via get_by_label('%s').", field_name, label)
+                            return True
+            except Exception as exc:
+                logger.debug("PopBrowserInjector: get_by_label('%s') failed: %s", label, exc)
+
+        # --- Strategy 2: CSS selector locator ---
+        locator = await self._find_visible_locator(page_or_frame, selectors)
         if not locator:
             logger.warning("PopBrowserInjector: no element found for '%s'. Tried %d selectors.", field_name, len(selectors))
             return False
         try:
-            el_info = await locator.evaluate("""el => ({
-                tag: el.tagName.toLowerCase(),
-                name: el.name || '',
-                id: el.id || '',
-                visible: el.offsetParent !== null,
-                frame: window.location.href,
-                optionCount: el.tagName === 'SELECT' ? el.options.length : 0,
-                currentValue: el.value,
-            })""")
-            tag = el_info["tag"]
-            logger.info(
-                "PopBrowserInjector: [%s] found <%s name='%s' id='%s'> visible=%s options=%d currentValue='%s' frame=%s → setting to '%s'",
-                field_name, tag, el_info["name"], el_info["id"],
-                el_info["visible"], el_info["optionCount"], el_info["currentValue"],
-                el_info["frame"], value,
-            )
+            tag = await locator.evaluate("el => el.tagName.toLowerCase()")
             if tag == "select":
                 filled = await self._select_option(locator, value)
-                # Verify: read back value after select_option
-                after_value = await locator.evaluate("el => el.value")
-                if filled and not after_value:
-                    logger.warning(
-                        "PopBrowserInjector: [%s] BUG — select_option returned True but el.value is EMPTY. "
-                        "visible=%s, name='%s', optionCount=%d",
-                        field_name, el_info["visible"], el_info["name"], el_info["optionCount"],
-                    )
-                    # Override: report as failed with diagnostic detail
-                    self._last_select_diag = (
-                        f"select_option ok but value empty after; "
-                        f"visible={el_info['visible']}, name={el_info['name']}, "
-                        f"options={el_info['optionCount']}, frame={el_info['frame']}"
-                    )
-                    filled = False
             else:
                 await locator.fill(value)
                 await self._dispatch_events(locator)
                 filled = True
             if filled:
-                logger.info("PopBrowserInjector: %s injected.", field_name)
+                logger.info("PopBrowserInjector: %s injected via CSS selector.", field_name)
             else:
-                logger.warning("PopBrowserInjector: %s — element found but selection failed.", field_name)
+                logger.warning("PopBrowserInjector: %s — element found but fill/selection failed.", field_name)
             return filled
         except Exception as exc:
             logger.warning("PopBrowserInjector: could not fill %s: %s", field_name, exc)
@@ -860,7 +852,9 @@ class PopBrowserInjector:
         Each field is attempted independently; missing selectors are silently skipped.
         Returns dict with per-field results: {"filled": [...], "failed": [...], "skipped": [...]}.
         """
-        f = page.main_frame
+        # Use page (not just main_frame) so get_by_label can search via accessibility tree.
+        # CSS selectors still search main_frame via _find_visible_locator.
+        f = page
         filled = []
         failed = []
         skipped = []
@@ -878,34 +872,29 @@ class PopBrowserInjector:
         state      = US_STATE_CODES.get(state_raw.upper(), state_raw) if len(state_raw) == 2 else state_raw
         city       = billing_info.get("city", "")
 
-        async def _try(selectors, value, name):
+        async def _try(selectors, value, name, label=""):
             if not value:
                 skipped.append(name)
                 return
-            self._last_select_diag = None
-            if await self._fill_field(f, selectors, value, name):
+            if await self._fill_field(f, selectors, value, name, label=label):
                 filled.append(name)
             else:
-                diag = self._last_select_diag or ""
-                detail = f"{name} (value='{value}')"
-                if diag:
-                    detail += f" [{diag}]"
-                failed.append(detail)
+                failed.append(f"{name} (value='{value}')")
 
-        await _try(FIRST_NAME_SELECTORS, first_name, "first_name")
-        await _try(LAST_NAME_SELECTORS, last_name, "last_name")
+        await _try(FIRST_NAME_SELECTORS, first_name, "first_name", label="First name")
+        await _try(LAST_NAME_SELECTORS, last_name, "last_name", label="Last name")
 
         # Full name fallback — only when no split first/last fields found
         if first_name or last_name:
             full_name = " ".join(filter(None, [first_name, last_name])).strip()
-            await _try(FULL_NAME_SELECTORS, full_name, "full_name")
+            await _try(FULL_NAME_SELECTORS, full_name, "full_name", label="Full name")
 
-        await _try(STREET_SELECTORS,  street,   "street")
-        await _try(CITY_SELECTORS,    city,     "city")
-        await _try(STATE_SELECTORS,   state,    "state")
-        await _try(COUNTRY_SELECTORS, country,  "country")
-        await _try(ZIP_SELECTORS,     zip_code, "zip")
-        await _try(EMAIL_SELECTORS,   email,    "email")
+        await _try(STREET_SELECTORS,  street,   "street",  label="Address")
+        await _try(CITY_SELECTORS,    city,     "city",    label="City")
+        await _try(STATE_SELECTORS,   state,    "state",   label="State")
+        await _try(COUNTRY_SELECTORS, country,  "country", label="Country")
+        await _try(ZIP_SELECTORS,     zip_code, "zip",     label="Zip")
+        await _try(EMAIL_SELECTORS,   email,    "email",   label="Email")
 
         # Phone: fill country code dropdown first (if present), then number field.
         phone_country_code = billing_info.get("phone_country_code", "")
