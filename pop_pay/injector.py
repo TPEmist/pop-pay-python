@@ -535,9 +535,11 @@ class PopBrowserInjector:
                 )
 
                 if has_billing:
-                    result["billing_filled"] = await self._fill_billing_fields(
+                    billing_result = await self._fill_billing_fields(
                         page, billing_info
                     )
+                    result["billing_filled"] = bool(billing_result["filled"])
+                    result["billing_details"] = billing_result
 
                 if blackout_mode == "after":
                     await self._enable_blackout(page)
@@ -780,16 +782,18 @@ class PopBrowserInjector:
             logger.warning("PopBrowserInjector: could not fill %s: %s", field_name, exc)
             return False
 
-    async def _fill_billing_fields(self, page, billing_info: dict) -> bool:
+    async def _fill_billing_fields(self, page, billing_info: dict) -> dict:
         """
         Fill billing detail fields in the main page frame.
         These fields are standard DOM inputs/selects — NOT inside Stripe iframes.
 
         Each field is attempted independently; missing selectors are silently skipped.
-        Returns True if at least one billing field was successfully filled.
+        Returns dict with per-field results: {"filled": [...], "failed": [...], "skipped": [...]}.
         """
         f = page.main_frame
-        any_filled = False
+        filled = []
+        failed = []
+        skipped = []
 
         first_name = billing_info.get("first_name", "")
         last_name  = billing_info.get("last_name", "")
@@ -804,42 +808,45 @@ class PopBrowserInjector:
         state      = US_STATE_CODES.get(state_raw.upper(), state_raw) if len(state_raw) == 2 else state_raw
         city       = billing_info.get("city", "")
 
-        if await self._fill_field(f, FIRST_NAME_SELECTORS, first_name, "first name"):
-            any_filled = True
-        if await self._fill_field(f, LAST_NAME_SELECTORS, last_name, "last name"):
-            any_filled = True
+        async def _try(selectors, value, name):
+            if not value:
+                skipped.append(name)
+                return
+            if await self._fill_field(f, selectors, value, name):
+                filled.append(name)
+            else:
+                failed.append(f"{name} (value='{value}')")
+
+        await _try(FIRST_NAME_SELECTORS, first_name, "first_name")
+        await _try(LAST_NAME_SELECTORS, last_name, "last_name")
 
         # Full name fallback — only when no split first/last fields found
         if first_name or last_name:
             full_name = " ".join(filter(None, [first_name, last_name])).strip()
-            if await self._fill_field(f, FULL_NAME_SELECTORS, full_name, "full name"):
-                any_filled = True
+            await _try(FULL_NAME_SELECTORS, full_name, "full_name")
 
-        if await self._fill_field(f, STREET_SELECTORS,  street,   "street"):    any_filled = True
-        if await self._fill_field(f, CITY_SELECTORS,    city,     "city"):      any_filled = True
-        if await self._fill_field(f, STATE_SELECTORS,   state,    "state"):     any_filled = True
-        if await self._fill_field(f, COUNTRY_SELECTORS, country,  "country"):   any_filled = True
-        if await self._fill_field(f, ZIP_SELECTORS,     zip_code, "zip"):       any_filled = True
-        if await self._fill_field(f, EMAIL_SELECTORS,   email,    "email"):     any_filled = True
+        await _try(STREET_SELECTORS,  street,   "street")
+        await _try(CITY_SELECTORS,    city,     "city")
+        await _try(STATE_SELECTORS,   state,    "state")
+        await _try(COUNTRY_SELECTORS, country,  "country")
+        await _try(ZIP_SELECTORS,     zip_code, "zip")
+        await _try(EMAIL_SELECTORS,   email,    "email")
 
         # Phone: fill country code dropdown first (if present), then number field.
-        # If a country code dropdown was found and POP_BILLING_PHONE_NATIONAL is set,
-        # fill the number field with the national number only (no country prefix).
-        # Otherwise fall back to the full E.164 number for combined inputs.
         phone_country_code = billing_info.get("phone_country_code", "")
         cc_filled = False
         if phone_country_code:
             cc_filled = await self._fill_field(
                 f, PHONE_COUNTRY_CODE_SELECTORS, phone_country_code, "phone country code"
             )
-        # When a country code dropdown was filled, use the national number only.
-        # _national_number() derives it from the E.164 string automatically —
-        # no separate POP_BILLING_PHONE_NATIONAL env var required.
+            if cc_filled:
+                filled.append("phone_country_code")
         phone_value = _national_number(phone, phone_country_code) if cc_filled else phone
-        if await self._fill_field(f, PHONE_SELECTORS, phone_value, "phone"):
-            any_filled = True
+        await _try(PHONE_SELECTORS, phone_value, "phone")
 
-        return any_filled
+        result = {"filled": filled, "failed": failed, "skipped": skipped}
+        logger.info("PopBrowserInjector: billing results: %s", result)
+        return result
 
     async def inject_billing_only(
         self,
@@ -905,7 +912,9 @@ class PopBrowserInjector:
 
                 await page.bring_to_front()
 
-                result["billing_filled"] = await self._fill_billing_fields(page, billing_info)
+                billing_result = await self._fill_billing_fields(page, billing_info)
+                result["billing_filled"] = bool(billing_result["filled"])
+                result["billing_details"] = billing_result
 
                 return result
 

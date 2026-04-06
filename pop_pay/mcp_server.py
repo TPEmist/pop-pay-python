@@ -438,11 +438,17 @@ async def request_virtual_card(
                 "--cdp-endpoint http://localhost:9222 so both MCPs share the same browser."
             )
 
-        billing_note = (
-            " Billing fields (name, address, email) were also filled automatically."
-            if billing_filled
-            else ""
-        )
+        billing_details = injection_result.get("billing_details", {}) if isinstance(injection_result, dict) else {}
+        if billing_filled and billing_details:
+            bd_filled = billing_details.get("filled", [])
+            bd_failed = billing_details.get("failed", [])
+            billing_note = f" Billing filled: {bd_filled}."
+            if bd_failed:
+                billing_note += f" FAILED: {bd_failed}."
+        elif billing_filled:
+            billing_note = " Billing fields filled."
+        else:
+            billing_note = ""
         return (
             f"Payment approved and securely auto-injected into the browser form."
             f"{billing_note}"
