@@ -11,7 +11,9 @@ DEFAULT_DB_PATH = os.path.join(os.path.expanduser("~"), ".config", "pop-pay", "p
 
 class PopStateTracker:
     def __init__(self, db_path: str = DEFAULT_DB_PATH):
-        os.makedirs(os.path.dirname(db_path), exist_ok=True)
+        parent = os.path.dirname(db_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         self.db_path = db_path
         # We keep the connection open for the lifetime of the tracker
         # This is especially important for :memory: databases

@@ -5,10 +5,11 @@ from pop_pay.engine.guardrails import GuardrailEngine
 from pop_pay.core.state import PopStateTracker
 
 class PopClient:
-    def __init__(self, provider: VirtualCardProvider, policy: GuardrailPolicy, engine: GuardrailEngine = None, db_path: str = "pop_state.db"):
+    def __init__(self, provider: VirtualCardProvider, policy: GuardrailPolicy, engine: GuardrailEngine = None, db_path: str = None):
         self.provider = provider
         self.policy = policy
-        self.state_tracker = PopStateTracker(db_path=db_path)
+        from pop_pay.core.state import DEFAULT_DB_PATH
+        self.state_tracker = PopStateTracker(db_path=db_path or DEFAULT_DB_PATH)
         self.engine = engine if engine is not None else GuardrailEngine()
         
     async def process_payment(self, intent: PaymentIntent) -> VirtualSeal:
