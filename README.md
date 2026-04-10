@@ -1,4 +1,5 @@
 [![PyPI version](https://img.shields.io/pypi/v/pop-pay.svg)](https://pypi.org/project/pop-pay/) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![CI](https://github.com/TPEmist/pop-pay-python/actions/workflows/test.yml/badge.svg)](https://github.com/TPEmist/pop-pay-python/actions/workflows/test.yml) [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![SafeSkill 60/100](https://img.shields.io/badge/SafeSkill-60%2F100_Use%20with%20Caution-orange)](https://safeskill.dev/scan/tpemist-pop-pay-python)
 
 <p align="center">
     <picture>
