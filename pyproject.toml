@@ -41,7 +41,7 @@ readme = {file = "README.md"}
 path = "hatch_build.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["pop_pay"]
+packages = ["pop_pay", "dashboard"]
 artifacts = ["pop_pay/**/*.so", "pop_pay/**/*.pyd"]
 
 [tool.hatch.build.hooks.custom]
