@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-04-10
+
+### Added
+- **`audit_log` table:** informational audit trail for MCP tool invocations. Every `request_purchaser_info` call now logs `event_type`, `vendor`, `reasoning`, and an ISO 8601 UTC timestamp. Non-blocking — failures to log never interrupt the main flow.
+- **Dashboard AUDIT_LOG section:** new table rendering `/api/audit` events (id, event_type, vendor, reasoning, timestamp).
+- **`PopStateTracker.record_audit_event()` / `.get_audit_events()`:** public API for emitting and reading audit events.
+
+### Fixed
+- **Bug 1 — timestamps now ISO 8601 with `Z` suffix:** `issued_seals.timestamp` previously used SQLite `CURRENT_TIMESTAMP` (`YYYY-MM-DD HH:MM:SS`), which is ambiguous about timezone and parsed as local time by browsers. New inserts use `datetime.now(timezone.utc)` serialized as `YYYY-MM-DDTHH:MM:SSZ`. Legacy rows are migrated in-place on first open.
+- **Bug 2 — `rejection_reason` column now persisted:** dashboard REJECTION_LOG previously showed an empty REASON column because `issued_seals` had no `rejection_reason` column. Added column + wired `client.py` to pass the reason through for all three rejection paths (budget, engine, success→null). Migration adds the column to legacy DBs.
+- **Dashboard/tracker schema drift:** `dashboard/server.py` used to run its own `init_db()` which didn't know about new columns. It now delegates schema creation + migration to `PopStateTracker`, so the dashboard and MCP server always agree on schema even if the dashboard is launched first against a legacy DB.
+
+### Changed
+- **Schema migration (upgrade-safe):** opening a legacy DB now (1) rebuilds `issued_seals` if it still has `card_number`/`cvv` columns (very-legacy path, preserves masked data); (2) adds `rejection_reason` if missing; (3) rewrites legacy `YYYY-MM-DD HH:MM:SS` timestamps to ISO 8601 Z format; (4) creates `audit_log` table. Migration is idempotent — running twice is a no-op.
+- **`datetime.utcnow()` → `datetime.now(timezone.utc)`:** the former is deprecated in Python 3.12+ and returns a naive datetime. The latter is timezone-aware and future-proof.
+- **Dashboard port 3210:** no functional change, but documented: port was chosen arbitrarily during initial dashboard bring-up and is kept for continuity with existing user bookmarks.
+
 ## [0.6.34] - 2026-04-06
 
 ### Fixed

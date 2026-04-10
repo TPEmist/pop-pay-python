@@ -267,17 +267,23 @@ async def _request_human_approval(
     return True, "auto-approved (no approval webhook configured)"
 
 
-async def _scan_and_validate(page_url: str, action_label: str = "Payment") -> tuple[bool, str]:
-    """Run security scan on page_url. Returns (ok, message).
+async def scan_and_validate(
+    page_url: str,
+    cache: dict,
+    prefix: str = "Payment",
+    item_name: str = "checkout",
+    retry_suffix: str = " payment",
+) -> tuple[str, str | None]:
+    """Helper to perform security scan and validation for MCP tools.
 
-    ok=True means scan passed (or was skipped). ok=False means the caller
-    should return `message` immediately as a rejection.
+    Returns (scan_note, error_msg | None).
     """
+    scan_note = ""
     if not page_url:
-        return True, f" (security scan skipped — no page_url provided)"
+        return " (security scan skipped — no page_url provided)", None
 
     # Check cache first (reuse recent scan within 5 minutes)
-    cached = snapshot_cache.get(page_url)
+    cached = cache.get(page_url)
     if cached and datetime.now() - cached["timestamp"] < timedelta(minutes=5):
         scan_result = {
             "flags": cached["flags"],
@@ -289,21 +295,22 @@ async def _scan_and_validate(page_url: str, action_label: str = "Payment") -> tu
         scan_result = await _scan_page(page_url)
 
     if scan_result.get("error"):
-        return False, (
-            f"{action_label} rejected. Security scan failed: {scan_result['error']} "
+        # Network/URL error — treat as unsafe
+        return "", (
+            f"{prefix} rejected. Security scan failed: {scan_result['error']} "
             f"Snapshot ID: {scan_result['snapshot_id']}. "
-            f"Fix the URL or skip page_url if the page has no associated URL."
+            f"Fix the URL or skip page_url if the {item_name} has no associated URL."
         )
 
     if not scan_result["safe"]:
-        return False, (
-            f"{action_label} rejected. Security scan detected hidden prompt injection. "
+        return "", (
+            f"{prefix} rejected. Security scan detected hidden prompt injection. "
             f"Snapshot ID: {scan_result['snapshot_id']}. "
             f"Flags: {scan_result['flags']}. "
-            f"Do not retry this."
+            f"Do not retry this{retry_suffix}."
         )
 
-    return True, ""
+    return scan_note, None
 
 
 # ---------------------------------------------------------------------------
@@ -342,10 +349,9 @@ async def request_virtual_card(
     # -------------------------------------------------------------------
     # P1: Automatic security scan (runs whenever page_url is provided)
     # -------------------------------------------------------------------
-    scan_ok, scan_msg = await _scan_and_validate(page_url, action_label="Payment")
-    if not scan_ok:
-        return scan_msg
-    scan_note = scan_msg  # empty string when scan passed, skip note when no page_url
+    scan_note, error_msg = await scan_and_validate(page_url, snapshot_cache)
+    if error_msg:
+        return error_msg
 
     # Human approval gate (if POP_APPROVAL_WEBHOOK is configured)
     require_approval = os.getenv("POP_REQUIRE_HUMAN_APPROVAL", "false").lower() == "true"
@@ -512,12 +518,25 @@ async def request_purchaser_info(
 
     This tool does NOT issue a card, does NOT charge anything, and does NOT affect your budget.
     """
+    # Audit log: every request_purchaser_info call is recorded, regardless of
+    # outcome, so operators can trace what vendors an agent tried to pay.
+    # This does NOT block the call — rejection (if any) happens later in
+    # request_virtual_card via process_payment.
+    try:
+        client.state_tracker.record_audit_event(
+            "purchaser_info_requested",
+            vendor=target_vendor,
+            reasoning=reasoning,
+        )
+    except Exception:
+        pass  # Audit failure must never block the main flow.
+
     # -------------------------------------------------------------------
     # P1: Automatic security scan (runs whenever page_url is provided)
     # -------------------------------------------------------------------
-    scan_ok, scan_msg = await _scan_and_validate(page_url, action_label="Billing info")
-    if not scan_ok:
-        return scan_msg
+    _, error_msg = await scan_and_validate(page_url, snapshot_cache, prefix="Billing info", item_name="page", retry_suffix="")
+    if error_msg:
+        return error_msg
 
     if injector is None:
         return (
@@ -628,6 +647,13 @@ async def request_x402_payment(
     ssrf_error = _ssrf_validate_url(service_url)
     if ssrf_error:
         return f"x402 payment rejected: SSRF validation failed for service_url. {ssrf_error}"
+
+    # -------------------------------------------------------------------
+    # P1: Automatic security scan
+    # -------------------------------------------------------------------
+    _, error_msg = await scan_and_validate(service_url, snapshot_cache, prefix="x402 payment", item_name="service", retry_suffix=" x402 payment")
+    if error_msg:
+        return error_msg
 
     # 3. Guardrail evaluation
     intent = PaymentIntent(

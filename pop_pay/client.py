@@ -23,10 +23,11 @@ class PopClient:
             )
             # Record rejection
             self.state_tracker.record_seal(
-                seal.seal_id, 
-                seal.authorized_amount, 
-                intent.target_vendor, 
-                status=seal.status
+                seal.seal_id,
+                seal.authorized_amount,
+                intent.target_vendor,
+                status=seal.status,
+                rejection_reason=seal.rejection_reason,
             )
             return seal
 
@@ -41,10 +42,11 @@ class PopClient:
             )
             # Record rejection
             self.state_tracker.record_seal(
-                seal.seal_id, 
-                seal.authorized_amount, 
-                intent.target_vendor, 
-                status=seal.status
+                seal.seal_id,
+                seal.authorized_amount,
+                intent.target_vendor,
+                status=seal.status,
+                rejection_reason=seal.rejection_reason,
             )
             return seal
             
@@ -64,7 +66,8 @@ class PopClient:
             intent.target_vendor,
             status=record_status,
             masked_card=f"****-****-****-{seal.card_number[-4:]}" if seal.card_number else "****-****-****-????",
-            expiration_date=seal.expiration_date
+            expiration_date=seal.expiration_date,
+            rejection_reason=seal.rejection_reason,
         )
         
         if seal.status.lower() != "rejected":

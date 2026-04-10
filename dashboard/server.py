@@ -33,6 +33,13 @@ class DashboardRequestHandler(http.server.BaseHTTPRequestHandler):
             query = parse_qs(parsed_path.query)
             status_filter = query.get("status", [None])[0]
             self.get_seals(status_filter)
+        elif path == "/api/audit":
+            query = parse_qs(parsed_path.query)
+            try:
+                limit = int(query.get("limit", ["100"])[0])
+            except ValueError:
+                limit = 100
+            self.get_audit(limit)
         elif path.startswith("/api/"):
             self._set_headers(404)
             self.wfile.write(json.dumps({"error": "Not Found"}).encode())
@@ -113,12 +120,12 @@ class DashboardRequestHandler(http.server.BaseHTTPRequestHandler):
         
         if status_filter:
             cursor.execute(
-                "SELECT seal_id, amount, vendor, status, masked_card, timestamp FROM issued_seals WHERE LOWER(status) = LOWER(?) ORDER BY timestamp DESC",
+                "SELECT seal_id, amount, vendor, status, masked_card, timestamp, rejection_reason FROM issued_seals WHERE LOWER(status) = LOWER(?) ORDER BY timestamp DESC",
                 (status_filter,)
             )
         else:
             cursor.execute(
-                "SELECT seal_id, amount, vendor, status, masked_card, timestamp FROM issued_seals ORDER BY timestamp DESC"
+                "SELECT seal_id, amount, vendor, status, masked_card, timestamp, rejection_reason FROM issued_seals ORDER BY timestamp DESC"
             )
         
         rows = cursor.fetchall()
@@ -148,6 +155,30 @@ class DashboardRequestHandler(http.server.BaseHTTPRequestHandler):
         self._set_headers()
         self.wfile.write(json.dumps(seals).encode())
 
+    def get_audit(self, limit: int = 100):
+        conn = self.get_db_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        # audit_log is created on first MCP server / tracker init; if the
+        # dashboard is launched before that, the table may not yet exist.
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS audit_log ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "event_type TEXT NOT NULL, "
+            "vendor TEXT, "
+            "reasoning TEXT, "
+            "timestamp TEXT NOT NULL)"
+        )
+        cursor.execute(
+            "SELECT id, event_type, vendor, reasoning, timestamp "
+            "FROM audit_log ORDER BY timestamp DESC, id DESC LIMIT ?",
+            (limit,),
+        )
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        self._set_headers()
+        self.wfile.write(json.dumps(rows).encode())
+
     def put_setting(self, key):
         content_length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(content_length)
@@ -172,25 +203,15 @@ class DashboardRequestHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(json.dumps({"key": key, "value": value}).encode())
 
 def init_db(db_path):
+    # Delegate schema creation + migrations to the canonical tracker so
+    # dashboard and MCP server always agree on the schema, even if the
+    # dashboard is launched first against a legacy DB.
+    from pop_pay.core.state import PopStateTracker
+    tracker = PopStateTracker(db_path=db_path)
+    tracker.close()
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS daily_budget (
-            date TEXT PRIMARY KEY,
-            spent_amount FLOAT
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS issued_seals (
-            seal_id TEXT PRIMARY KEY,
-            amount FLOAT,
-            vendor TEXT,
-            status TEXT,
-            masked_card TEXT,
-            expiration_date TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS dashboard_settings (
             key TEXT PRIMARY KEY,

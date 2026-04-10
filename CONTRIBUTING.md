@@ -68,6 +68,19 @@ We use `pytest` for our test suite. To run all tests:
 pytest
 ```
 
+### Schema Changes
+
+`PopStateTracker` (`pop_pay/core/state.py`) is the single source of truth for the SQLite schema. The dashboard (`dashboard/server.py`) delegates all table creation and migration to `PopStateTracker` on startup. If you add or modify a column:
+
+1. Update the `CREATE TABLE` in `PopStateTracker.__init__` so fresh DBs get the new shape.
+2. Add a migration branch next to the existing ones (add-column / rebuild) so legacy DBs upgrade in place. **Migrations must be idempotent** — running them on an already-migrated DB must be a no-op.
+3. Use ISO 8601 UTC with a `Z` suffix for all timestamps (`datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")`). Do **not** use SQLite `CURRENT_TIMESTAMP`, which is ambiguous about timezone and parses as local time in browsers.
+4. Add a regression test in `tests/test_audit_and_migration.py` that constructs a pre-change DB, opens it with `PopStateTracker`, and asserts the new shape.
+
+### Dashboard Port
+
+The local dashboard listens on **port 3210** by default. This number was chosen arbitrarily during initial bring-up; it has no special meaning and is kept stable so existing user bookmarks continue to work. Override with the `--port` flag if you need to run multiple dashboards side-by-side.
+
 ---
 
 ## Call for Contributions
@@ -112,7 +125,7 @@ The `PopBrowserInjector` uses Playwright's `connectOverCDP` for cross-origin ifr
 **Implementation notes:**
 - `mcp_server.py` `request_virtual_card` and `request_purchaser_info` should catch all rejection/block paths and return the opaque string before returning to the agent.
 - `pop_state.db` audit log already stores structured data — the detailed reason should continue to be written there.
-- A new `rejection_detail` column (or existing `rejection_reason`) in `issued_seals` / audit log should surface in the Dashboard's transaction table.
+- The `rejection_reason` column on `issued_seals` (added in v0.8.0) already surfaces in the Dashboard's REJECTION_LOG table. Any new opaque-response work should continue to write the full reason there while returning the generic string to the MCP caller.
 - Edge case: injection failures that require agent action (e.g. "card fields not found — pass page_url") are UX errors, not security rejections, and may still return actionable messages to the agent.
 
 ### 7. Known Payment Processors List

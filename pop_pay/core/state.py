@@ -4,7 +4,7 @@ import base64
 import hashlib
 import hmac
 import socket
-from datetime import date
+from datetime import date, datetime, timezone
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 DEFAULT_DB_PATH = os.path.join(os.path.expanduser("~"), ".config", "pop-pay", "pop_state.db")
@@ -77,7 +77,18 @@ class PopStateTracker:
                 status TEXT,
                 masked_card TEXT,
                 expiration_date TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                timestamp TEXT NOT NULL,
+                rejection_reason TEXT
+            )
+        """)
+        # Create audit_log table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                vendor TEXT,
+                reasoning TEXT,
+                timestamp TEXT NOT NULL
             )
         """)
         self.conn.commit()
@@ -85,42 +96,61 @@ class PopStateTracker:
         self._migrate_schema()
 
     def _migrate_schema(self):
-        """Migrate old schema (card_number, cvv) to new schema (masked_card only)."""
+        """Migrate old schema (card_number, cvv) and apply other updates."""
         cursor = self.conn.cursor()
-        # Check if old card_number column exists
         cursor.execute("PRAGMA table_info(issued_seals)")
         columns = {row[1] for row in cursor.fetchall()}
 
+        # Preserve and adapt original migration: if legacy columns exist, rebuild the table to the modern schema.
         if "card_number" in columns or "cvv" in columns:
-            # Add masked_card column if not already present
             if "masked_card" not in columns:
                 cursor.execute("ALTER TABLE issued_seals ADD COLUMN masked_card TEXT")
-            # Derive masked_card from last 4 digits of card_number
             if "card_number" in columns:
                 cursor.execute(
                     "UPDATE issued_seals SET masked_card = '****-****-****-' || substr(card_number, -4) "
                     "WHERE masked_card IS NULL AND card_number IS NOT NULL"
                 )
-            # Recreate table without card_number and cvv columns (SQLite cannot DROP COLUMN pre-3.35)
+            # Recreate table with the full new schema to handle all changes (drop cols, change types)
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS issued_seals_new (
+                CREATE TABLE issued_seals_new (
                     seal_id TEXT PRIMARY KEY,
                     amount FLOAT,
                     vendor TEXT,
                     status TEXT,
                     masked_card TEXT,
                     expiration_date TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    timestamp TEXT NOT NULL,
+                    rejection_reason TEXT
                 )
             """)
             cursor.execute("""
-                INSERT INTO issued_seals_new (seal_id, amount, vendor, status, masked_card, expiration_date, timestamp)
-                SELECT seal_id, amount, vendor, status, masked_card, expiration_date, timestamp
+                INSERT INTO issued_seals_new (seal_id, amount, vendor, status, masked_card, expiration_date, timestamp, rejection_reason)
+                SELECT seal_id, amount, vendor, status, masked_card, expiration_date, COALESCE(timestamp, '1970-01-01T00:00:00Z'), NULL
                 FROM issued_seals
             """)
             cursor.execute("DROP TABLE issued_seals")
             cursor.execute("ALTER TABLE issued_seals_new RENAME TO issued_seals")
             self.conn.commit()
+            # After rebuild, schema is modern. Re-fetch columns.
+            cursor.execute("PRAGMA table_info(issued_seals)")
+            columns = {row[1] for row in cursor.fetchall()}
+
+        # ADD: If rejection_reason column is missing (for users not hitting the legacy path)
+        if "rejection_reason" not in columns:
+            cursor.execute("ALTER TABLE issued_seals ADD COLUMN rejection_reason TEXT")
+            self.conn.commit()
+
+        # ADD: One-time UPDATE to convert timestamp format to ISO 8601 with Z.
+        # This is safe for all schemas, including freshly migrated ones.
+        cursor.execute(
+            "UPDATE issued_seals SET timestamp = REPLACE(timestamp, ' ', 'T') || 'Z' "
+            "WHERE timestamp NOT LIKE '%T%' AND timestamp IS NOT NULL AND timestamp != ''"
+        )
+        self.conn.commit()
+
+    def _utc_now_iso(self) -> str:
+        """Return the current UTC time as an ISO 8601 string with a Z suffix."""
+        return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
     def _get_today_spent(self) -> float:
         today = date.today().isoformat()
@@ -144,13 +174,23 @@ class PopStateTracker:
         self.conn.commit()
         self.daily_spend_total = self._get_today_spent()
 
-    def record_seal(self, seal_id: str, amount: float, vendor: str, status: str = "Issued", masked_card: str = None, expiration_date: str = None):
+    def record_seal(
+        self,
+        seal_id: str,
+        amount: float,
+        vendor: str,
+        status: str = "Issued",
+        masked_card: str = None,
+        expiration_date: str = None,
+        rejection_reason: str = None,
+    ):
         encrypted_card = self._encrypt_field(masked_card)
+        timestamp = self._utc_now_iso()
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO issued_seals (seal_id, amount, vendor, status, masked_card, expiration_date)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (seal_id, amount, vendor, status, encrypted_card, expiration_date))
+            INSERT INTO issued_seals (seal_id, amount, vendor, status, masked_card, expiration_date, timestamp, rejection_reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (seal_id, amount, vendor, status, encrypted_card, expiration_date, timestamp, rejection_reason))
         self.conn.commit()
 
     def get_seal_masked_card(self, seal_id: str) -> str:
@@ -167,6 +207,32 @@ class PopStateTracker:
         cursor = self.conn.cursor()
         cursor.execute("UPDATE issued_seals SET status = ? WHERE seal_id = ?", (status, seal_id))
         self.conn.commit()
+
+    def record_audit_event(self, event_type: str, vendor: str = None, reasoning: str = None) -> int:
+        """Insert an audit log entry. Returns the new row id."""
+        timestamp = self._utc_now_iso()
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO audit_log (event_type, vendor, reasoning, timestamp)
+            VALUES (?, ?, ?, ?)
+        """, (event_type, vendor, reasoning, timestamp))
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def get_audit_events(self, limit: int = 100) -> list[dict]:
+        """Return audit log entries, most recent first, as list of dicts with keys
+        id, event_type, vendor, reasoning, timestamp."""
+        try:
+            self.conn.row_factory = sqlite3.Row
+            cursor = self.conn.cursor()
+            cursor.execute(
+                "SELECT id, event_type, vendor, reasoning, timestamp FROM audit_log ORDER BY timestamp DESC, id DESC LIMIT ?",
+                (limit,)
+            )
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            self.conn.row_factory = None
 
     def mark_used(self, seal_id: str):
         cursor = self.conn.cursor()
