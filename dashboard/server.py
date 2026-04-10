@@ -8,7 +8,7 @@ import argparse
 from datetime import date
 from urllib.parse import urlparse, parse_qs
 
-DEFAULT_DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "pop_state.db"))
+DEFAULT_DB_PATH = os.path.join(os.path.expanduser("~"), ".config", "pop-pay", "pop_state.db")
 STATIC_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class DashboardRequestHandler(http.server.BaseHTTPRequestHandler):

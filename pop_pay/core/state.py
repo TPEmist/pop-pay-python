@@ -7,8 +7,11 @@ import socket
 from datetime import date
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+DEFAULT_DB_PATH = os.path.join(os.path.expanduser("~"), ".config", "pop-pay", "pop_state.db")
+
 class PopStateTracker:
-    def __init__(self, db_path: str = "pop_state.db"):
+    def __init__(self, db_path: str = DEFAULT_DB_PATH):
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.db_path = db_path
         # We keep the connection open for the lifetime of the tracker
         # This is especially important for :memory: databases
