@@ -2,7 +2,7 @@
 name: pop-pay
 version: "0.6.23"
 description: "Your card stays on your PC — no SaaS, no login, no external account. Credentials inject directly, keeping them out of the AI's context window."
-homepage: https://github.com/TPEmist/Point-One-Percent
+homepage: https://github.com/100xPercent/pop-pay-python
 author: Point One Percent
 license: MIT
 requires:
@@ -200,4 +200,4 @@ result = request_virtual_card(
 
 ## GitHub
 
-[github.com/TPEmist/Point-One-Percent](https://github.com/TPEmist/Point-One-Percent)
+[github.com/100xPercent/pop-pay-python](https://github.com/100xPercent/pop-pay-python)

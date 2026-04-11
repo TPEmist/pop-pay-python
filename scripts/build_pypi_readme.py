@@ -1,7 +1,7 @@
 import os
 import re
 
-GITHUB_BASE = "https://github.com/TPEmist/Point-One-Percent/blob/main"
+GITHUB_BASE = "https://github.com/100xPercent/pop-pay-python/blob/main"
 
 with open("README.md", "r", encoding="utf-8") as f:
     lines = f.readlines()
@@ -14,7 +14,7 @@ for line in lines:
         out_lines.append(
             "\n> **Note**: This is the PyPI published documentation. "
             "For the full architecture diagrams and real UI screenshots, "
-            "please visit the [GitHub Repository](https://github.com/TPEmist/Point-One-Percent).\n"
+            "please visit the [GitHub Repository](https://github.com/100xPercent/pop-pay-python).\n"
         )
         continue
 

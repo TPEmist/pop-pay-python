@@ -2,7 +2,7 @@
 
 <p align="center">
     <picture>
-        <img src="https://raw.githubusercontent.com/TPEmist/Point-One-Percent/main/project_banner.png" alt="Point One Percent (AgentPay)" width="800">
+        <img src="https://raw.githubusercontent.com/100xPercent/pop-pay-python/main/project_banner.png" alt="Point One Percent (AgentPay)" width="800">
     </picture>
 </p>
 
@@ -12,7 +12,7 @@
 The runtime security layer for AI agent commerce. Card credentials are injected directly into the browser DOM via CDP — they never enter the agent's context window. One hallucinated prompt can't drain a wallet it can't see.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/TPEmist/Point-One-Percent/main/assets/runtime_demo.gif" alt="Point One Percent — live CDP injection demo" width="800">
+  <img src="https://raw.githubusercontent.com/100xPercent/pop-pay-python/main/assets/runtime_demo.gif" alt="Point One Percent — live CDP injection demo" width="800">
 </p>
 
 ## Getting Started

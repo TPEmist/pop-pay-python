@@ -8,7 +8,7 @@ pip install pop-pay
 
 ## Why was it renamed?
 
-**aegis-pay** is now **[Point One Percent](https://github.com/TPEmist/Point-One-Percent)** (`pop-pay`).
+**aegis-pay** is now **[Point One Percent](https://github.com/100xPercent/pop-pay-python)** (`pop-pay`).
 
 > it only takes 0.1% of Hallucination to drain 100% of your wallet.
 
@@ -24,5 +24,5 @@ The package has been renamed to better reflect the project's mission. All functi
 ## Links
 
 - **New package**: https://pypi.org/project/pop-pay/
-- **GitHub**: https://github.com/TPEmist/Point-One-Percent
-- **Documentation**: https://github.com/TPEmist/Point-One-Percent/blob/main/docs/INTEGRATION_GUIDE.md
+- **GitHub**: https://github.com/100xPercent/pop-pay-python
+- **Documentation**: https://github.com/100xPercent/pop-pay-python/blob/main/docs/INTEGRATION_GUIDE.md

@@ -4,7 +4,7 @@
   "name": "Point One Percent — AI Agent Payment Guardrail",
   "description": "Local MCP server and semantic payment guardrail for agentic workflows. Intercepts agent payment intent, evaluates reasoning against policy (keyword or LLM engine), and injects card credentials directly into browser forms via CDP — the raw card number never enters the agent's context window.",
   "license": "MIT",
-  "homepage": "https://github.com/TPEmist/Point-One-Percent",
+  "homepage": "https://github.com/100xPercent/pop-pay-python",
   "tools": [
     {
       "name": "request_virtual_card",

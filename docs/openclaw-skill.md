@@ -169,4 +169,4 @@ result = request_virtual_card(
 
 ## GitHub
 
-[github.com/TPEmist/Point-One-Percent](https://github.com/TPEmist/Point-One-Percent)
+[github.com/100xPercent/pop-pay-python](https://github.com/100xPercent/pop-pay-python)

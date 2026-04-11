@@ -668,8 +668,8 @@ pop-launch
 ```bash
 nemoclaw my-assistant connect
 cd /sandbox
-git clone https://github.com/TPEmist/Point-One-Percent.git
-cd Point-One-Percent && uv sync --all-extras
+git clone https://github.com/100xPercent/pop-pay-python.git
+cd pop-pay-python && uv sync --all-extras
 ```
 
 **步驟 2 — 在 policy YAML 中以 Providers 宣告 POP 憑證**
