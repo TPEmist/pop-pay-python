@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.6] - 2026-04-13
+
+### Changed
+- **README cross-link to npm repo**: added a note pointing Node.js / JavaScript users to `pop-pay (npm)` (`npm i -g pop-pay` or `brew install 100xPercent/tap/pop-pay`), noting shared security model and vault format for safe runtime switching.
+- **`glama.json` alignment**: description and keywords aligned with the CLI-first framing used in the npm repo (maintainer: TPEmist).
+
+### Notes
+- No source-code changes. Docs / distribution release paired with npm `0.5.6`.
+
 ## [0.8.4] - 2026-04-10
 
 ### Fixed
