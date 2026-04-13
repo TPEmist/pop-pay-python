@@ -17,25 +17,38 @@ The runtime security layer for AI agent commerce. Drop-in CLI + MCP server. Card
 
 ## Install
 
-### pipx (recommended — isolated global CLI)
+Choose your preferred method:
+
+<details>
+<summary>pipx — isolated global CLI</summary>
+
 ```bash
 pipx install "pop-pay[mcp]"
 ```
 
-<details>
-<summary>Other install methods (pip / uv)</summary>
+</details>
 
-**pip**:
+<details>
+<summary>pip</summary>
+
 ```bash
 pip install "pop-pay[mcp]"
 ```
 
-**uv** (isolated tool install):
+</details>
+
+<details>
+<summary>uv (isolated tool install)</summary>
+
 ```bash
 uv tool install "pop-pay[mcp]"
 ```
 
-**Extras matrix** — pick the feature flags you need:
+</details>
+
+<details>
+<summary>Extras matrix — feature flags</summary>
+
 ```bash
 pip install "pop-pay"                  # core (keyword guardrail + mock provider)
 pip install "pop-pay[mcp,browser]"     # CDP injection (browser automation)
