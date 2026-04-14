@@ -9,8 +9,35 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
+
+_KEY_PATTERNS = [
+    (re.compile(r"sk-[A-Za-z0-9_-]{16,}"), "sk-REDACTED"),
+    (re.compile(r"Bearer\s+[A-Za-z0-9._-]{16,}", re.IGNORECASE), "Bearer REDACTED"),
+]
+
+
+def _scrub_key(s):
+    if not isinstance(s, str):
+        return s
+    for pat, repl in _KEY_PATTERNS:
+        s = pat.sub(repl, s)
+    # Catch-all long alphanumeric token (avoid stripping pure digits like ids).
+    s = re.sub(r"[A-Za-z0-9]{32,}", lambda m: m.group(0) if m.group(0).isdigit() else "[REDACTED-LONG-TOKEN]", s)
+    return s
+
+
+def _scrub_row(row):
+    for runner in ("layer1", "layer2", "hybrid", "full_mcp", "toctou"):
+        r = row.get(runner)
+        if r:
+            if "reason" in r:
+                r["reason"] = _scrub_key(r["reason"])
+            if "error" in r:
+                r["error"] = _scrub_key(r["error"])
+    return row
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -96,6 +123,7 @@ async def _run(opts) -> None:
         done = 0
         for coro in asyncio.as_completed(tasks):
             row = await coro
+            row = _scrub_row(row)
             rows.append(row)
             fh.write(json.dumps({"type": "row", **row}) + "\n")
             done += 1
@@ -119,7 +147,16 @@ def main() -> int:
     p.add_argument("--concurrency", type=int, default=int(os.environ.get("POP_REDTEAM_CONCURRENCY", "20")))
     p.add_argument("--corpus", default="tests/redteam/corpus/attacks.json")
     p.add_argument("--out-dir", default="tests/redteam/runs")
-    asyncio.run(_run(p.parse_args()))
+    p.add_argument("--allow-skip-llm", action="store_true", help="Permit unkeyed run (v0.1 Preliminary only)")
+    args = p.parse_args()
+    if not args.allow_skip_llm and not (os.environ.get("POP_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")):
+        print(
+            "POP_LLM_API_KEY (or OPENAI_API_KEY) not set. Layer 2 / Hybrid / Full MCP would silently skip "
+            "— that produces v0.1 Preliminary numbers only. Pass --allow-skip-llm to force an unkeyed run.",
+            file=sys.stderr,
+        )
+        return 3
+    asyncio.run(_run(args))
     return 0
 
 
