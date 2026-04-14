@@ -246,7 +246,7 @@ See [THREAT_MODEL.md](./docs/THREAT_MODEL.md) for the full STRIDE analysis and [
 ## Documentation
 
 - [Threat Model](docs/THREAT_MODEL.md) — STRIDE analysis, 5 security primitives, 10 attack scenarios
-- [Guardrail Benchmark](docs/THREAT_MODEL.md#guardrail-benchmark) — 95% accuracy across 20 test scenarios
+- [Guardrail Benchmark](docs/THREAT_MODEL.md#guardrail-benchmark) — v1 benchmark in progress; single-model variance too high for a numeric accuracy claim
 - [Compliance FAQ](docs/COMPLIANCE_FAQ.md) — PCI DSS, SOC 2, GDPR details
 - [Environment Reference](docs/ENV_REFERENCE.md) — All POP_* environment variables
 - [Integration Guide](docs/INTEGRATION_GUIDE.md) — Setup for Claude Code, Python SDK, and browser agents
