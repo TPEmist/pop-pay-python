@@ -3,6 +3,12 @@ from html import escape as _html_escape
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy
 from pop_pay.engine.guardrails import GuardrailEngine
+from pop_pay.errors import (
+    PopPayLLMError,
+    ProviderUnreachable,
+    InvalidResponse,
+    RetryExhausted,
+)
 
 
 def _escape_xml(s: str) -> str:
@@ -21,10 +27,11 @@ class LLMGuardrailEngine:
     def __init__(self, api_key: str = None, base_url: str = None, model: str = 'gpt-4o-mini', use_json_mode: bool = True):
         try:
             import openai as _openai
-        except ImportError:
-            raise ImportError(
-                "openai is required for LLM guardrail mode. "
-                "Install it with: pip install 'pop-pay[llm]'"
+        except ImportError as e:
+            raise ProviderUnreachable(
+                "openai",
+                remediation="Install it with: pip install 'pop-pay[llm]'",
+                cause=e,
             )
         self.client = _openai.AsyncOpenAI(api_key=api_key or 'not-needed', base_url=base_url)
         self._openai = _openai

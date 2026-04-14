@@ -29,9 +29,10 @@ def test_vault_encrypt_decrypt(tmp_path):
 
 
 def test_vault_wrong_key_raises():
-    """Tampered blob must raise ValueError."""
+    """Tampered blob must raise VaultDecryptFailed."""
     pytest.importorskip("cryptography", reason="cryptography package required for vault tests")
     from pop_pay.vault import encrypt_credentials, decrypt_credentials
+    from pop_pay.errors import VaultDecryptFailed
 
     creds = {"card_number": "4111111111111111", "cvv": "999"}
     blob = encrypt_credentials(creds)
@@ -39,7 +40,7 @@ def test_vault_wrong_key_raises():
     # Flip a byte in the ciphertext region (after the 12-byte nonce)
     tampered = bytearray(blob)
     tampered[20] ^= 0xFF
-    with pytest.raises(ValueError):
+    with pytest.raises(VaultDecryptFailed):
         decrypt_credentials(bytes(tampered))
 
 

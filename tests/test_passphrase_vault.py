@@ -29,7 +29,8 @@ def test_passphrase_wrong_key_fails():
     key1 = derive_key_from_passphrase("correct-passphrase")
     key2 = derive_key_from_passphrase("wrong-passphrase")
     blob = encrypt_credentials({"card_number": "4111"}, key_override=key1)
-    with pytest.raises(ValueError):
+    from pop_pay.errors import VaultDecryptFailed
+    with pytest.raises(VaultDecryptFailed):
         decrypt_credentials(blob, key_override=key2)
 
 
@@ -40,5 +41,6 @@ def test_passphrase_different_from_machine_cannot_decrypt():
     passphrase_key = derive_key_from_passphrase("secret-pass")
     machine_key = _derive_key()
     blob = encrypt_credentials({"card_number": "4111"}, key_override=passphrase_key)
-    with pytest.raises(ValueError):
+    from pop_pay.errors import VaultDecryptFailed
+    with pytest.raises(VaultDecryptFailed):
         decrypt_credentials(blob, key_override=machine_key)

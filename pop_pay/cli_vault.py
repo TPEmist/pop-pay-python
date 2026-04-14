@@ -8,9 +8,21 @@ from pop_pay.vault import (
     VAULT_DIR, VAULT_PATH, OSS_WARNING,
     _read_vault_mode,
 )
+from pop_pay.errors import (
+    handle_cli_error,
+    VaultDecryptFailed,
+)
 
 
 def cmd_init_vault():
+    """Entry point wrapper: delegates to _cmd_init_vault and formats typed errors."""
+    try:
+        _cmd_init_vault()
+    except Exception as e:
+        handle_cli_error(e)
+
+
+def _cmd_init_vault():
     """Interactive setup: encrypt card credentials and burn .env."""
     parser = argparse.ArgumentParser(description="Initialize pop-pay credential vault")
     parser.add_argument("--passphrase", action="store_true",
@@ -31,22 +43,19 @@ def cmd_init_vault():
             try:
                 from pop_pay.engine import _vault_core
                 is_hardened = _vault_core.is_hardened()
-            except Exception:
+            except ImportError:
                 is_hardened = False
             if not is_hardened:
-                print(
-                    "\n\033[1;31mERROR: Existing vault was created with a hardened PyPI build,\n"
-                    "but the Cython extension is missing or not hardened.\n"
-                    "Re-initializing now would DOWNGRADE encryption to the public OSS salt.\n\n"
-                    "To proceed safely:\n"
-                    "  1. Reinstall via PyPI: pip install pop-pay\n"
-                    "  2. Then re-run: pop-init-vault\n\n"
-                    "If you intentionally switched to OSS, manually delete:\n"
-                    f"  {VAULT_PATH}\n"
-                    f"  {VAULT_DIR / '.vault_mode'}\n"
-                    "Then re-run pop-init-vault.\033[0m\n"
+                raise VaultDecryptFailed(
+                    "Existing vault was created with a hardened PyPI build, "
+                    "but the Cython extension is missing or not hardened. "
+                    "Re-initializing now would DOWNGRADE encryption to the public OSS salt.",
+                    remediation=(
+                        "Reinstall via PyPI (pip install pop-pay) and re-run pop-init-vault; "
+                        "or, if intentionally switching to OSS, delete "
+                        f"{VAULT_PATH} and {VAULT_DIR / '.vault_mode'} first."
+                    ),
                 )
-                sys.exit(1)
 
         overwrite = input("A vault already exists. Overwrite? [y/N]: ").strip().lower()
         if overwrite != "y":
@@ -87,12 +96,7 @@ def cmd_init_vault():
     }
 
     print("\nEncrypting and writing vault...")
-    try:
-        save_vault(creds, key_override=key_override)
-    except Exception as e:
-        print(f"ERROR: {e}")
-        sys.exit(1)
-
+    save_vault(creds, key_override=key_override)
     print(f"Vault written to {VAULT_PATH}")
 
     # Handle policy .env
