@@ -45,12 +45,9 @@ except (ValueError, RuntimeError) as _ve:
     import sys as _sys
     _sys.stderr.write(f"\n⚠️  pop-pay vault error: {_ve}\n")
 
-# Vault credentials override env vars for BYOC
-if _vault_creds:
-    os.environ.setdefault("POP_BYOC_NUMBER", _vault_creds.get("card_number", ""))
-    os.environ.setdefault("POP_BYOC_CVV", _vault_creds.get("cvv", ""))
-    os.environ.setdefault("POP_BYOC_EXP_MONTH", _vault_creds.get("exp_month", ""))
-    os.environ.setdefault("POP_BYOC_EXP_YEAR", _vault_creds.get("exp_year", ""))
+# S0.7 F1: do NOT write plaintext PAN/CVV into os.environ. Vault creds stay
+# scoped to `_vault_creds` and are passed directly to LocalVaultProvider.
+# Child processes spawned by pop-pay get a filtered env via filtered_env().
 
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy
 from pop_pay.providers.stripe_mock import MockStripeProvider
@@ -98,8 +95,8 @@ policy = GuardrailPolicy(
 if stripe_key:
     from pop_pay.providers.stripe_real import StripeIssuingProvider
     provider = StripeIssuingProvider(api_key=stripe_key)
-elif os.getenv("POP_BYOC_NUMBER"):
-    provider = LocalVaultProvider()
+elif _vault_creds.get("card_number") or os.getenv("POP_BYOC_NUMBER"):
+    provider = LocalVaultProvider(_vault_creds if _vault_creds.get("card_number") else None)
 else:
     provider = MockStripeProvider()
 
