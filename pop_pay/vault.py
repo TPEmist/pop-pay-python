@@ -314,3 +314,20 @@ def secure_wipe_env(env_path: Path):
         f.flush()
         os.fsync(f.fileno())
     env_path.unlink()
+
+
+# S0.7 F1: env keys that carry plaintext PAN/CVV/expiry. Vault plaintext never
+# enters os.environ in the first place; redaction here is defense in depth for
+# child processes spawned by pop-pay.
+SENSITIVE_ENV_KEYS = (
+    "POP_BYOC_NUMBER",
+    "POP_BYOC_CVV",
+    "POP_BYOC_EXP_MONTH",
+    "POP_BYOC_EXP_YEAR",
+)
+
+
+def filtered_env(base: dict | None = None) -> dict:
+    """Return a copy of *base* (default os.environ) with SENSITIVE_ENV_KEYS stripped."""
+    src = os.environ if base is None else base
+    return {k: v for k, v in src.items() if k not in SENSITIVE_ENV_KEYS}

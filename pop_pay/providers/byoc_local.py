@@ -5,12 +5,17 @@ from pop_pay.providers.base import VirtualCardProvider
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy, VirtualSeal
 
 class LocalVaultProvider(VirtualCardProvider):
-    def __init__(self):
+    def __init__(self, creds: dict | None = None):
         load_dotenv()
-        self.card_number = os.getenv("POP_BYOC_NUMBER")
-        self.exp_month = os.getenv("POP_BYOC_EXP_MONTH")
-        self.exp_year = os.getenv("POP_BYOC_EXP_YEAR")
-        self.cvv = os.getenv("POP_BYOC_CVV")
+        # S0.7 F1: prefer explicitly injected creds (vault path). Env fallback
+        # is for users setting POP_BYOC_* manually in .env without a vault.
+        # Plaintext PAN/CVV no longer round-trips through os.environ when
+        # sourced from vault.
+        creds = creds or {}
+        self.card_number = creds.get("card_number") or os.getenv("POP_BYOC_NUMBER")
+        self.exp_month = creds.get("exp_month") or os.getenv("POP_BYOC_EXP_MONTH")
+        self.exp_year = creds.get("exp_year") or os.getenv("POP_BYOC_EXP_YEAR")
+        self.cvv = creds.get("cvv") or os.getenv("POP_BYOC_CVV")
 
         # Billing fields are optional — empty string means "not configured"
         self._billing_first_name = os.getenv("POP_BILLING_FIRST_NAME", "").strip()
@@ -25,7 +30,7 @@ class LocalVaultProvider(VirtualCardProvider):
         self._billing_phone_country_code = os.getenv("POP_BILLING_PHONE_COUNTRY_CODE", "").strip()
 
         if not all([self.card_number, self.exp_month, self.exp_year, self.cvv]):
-            raise ValueError("Missing BYOC environment variables. Please check POP_BYOC_NUMBER, POP_BYOC_EXP_MONTH, POP_BYOC_EXP_YEAR, POP_BYOC_CVV in .env.")
+            raise ValueError("Missing BYOC credentials. Configure via vault (`pop-pay init-vault`) or env (POP_BYOC_NUMBER, POP_BYOC_EXP_MONTH, POP_BYOC_EXP_YEAR, POP_BYOC_CVV).")
 
     @property
     def billing_info(self) -> dict:
