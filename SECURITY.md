@@ -163,11 +163,11 @@ The agent cannot cross the process boundary through MCP protocol alone. File-rea
 
 We operate a three-tier bounty. Submissions are triaged against these definitions; a single report may cross tiers, in which case the highest qualifying tier applies.
 
-### Tier 1 — Passive Leak ($100–300 + Hall of Fame)
+### Tier 1 — Passive Leak ($500 + Hall of Fame)
 
 **Scope**: PAN, CVV, or expiry leaks out of a running pop-pay process through a passive surface — logs, screenshots, exception tracebacks (including `show_locals` / `rich.traceback`), temp files, swap, clipboard, browser cache, or metadata. No adversarial action required; the credential simply appears somewhere it shouldn't. See `docs/VAULT_THREAT_MODEL.md` §3.1–3.7 for the canonical passive scenarios.
 
-### Tier 2 — Active Attack ($300–800 + Hall of Fame)
+### Tier 2 — Active Attack ($1,000 + Hall of Fame)
 
 **Scope**: An adversarially-driven extraction or policy-violation path. Includes:
 - Prompt injection / role injection that causes unauthorized purchase authorization
