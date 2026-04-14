@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 - **`check_env_vars` is format-only and content-blind.** `POP_LLM_*` secrets reported as `present (hidden)` / `missing`; no length, prefix, or hash ever emitted.
 - **`check_layer2_probe` is TCP-only.** Connects and disconnects — no HTTP request, no API key transmitted, no quota consumed.
+- **Public vault canary `examples/vault-challenge/vault.enc.challenge`** — Tier 3 bounty target (mirror of npm repo). AES-256-GCM blob with discarded scrypt passphrase + fake card + flag string. Reproducible `gen-challenge.js` / `gen-challenge.py` generators. See `examples/vault-challenge/README.md`.
+
+### Documentation
+- **`docs/VAULT_THREAT_MODEL.md` v0.1** — vault-layer threat model (mirror of npm repo). Active attacks + standalone passive failure mode section with 7 concrete scenarios. Python-side line-level audit of `_vault_core.pyx` + `pop_pay/vault.py` flagged as pending in §5.
+- **`docs/HALL_OF_FAME.md`** — public recognition stub for Tier 3 vault-extraction bounty.
 
 ## [0.8.6] - 2026-04-13
 
