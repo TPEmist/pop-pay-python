@@ -221,23 +221,45 @@ def vault_exists() -> bool:
     return VAULT_PATH.exists()
 
 
-def _write_vault_mode():
-    """Write .vault_mode marker (hardened/oss). Read by pop-init-vault and load_vault."""
-    try:
-        from pop_pay.engine import _vault_core
-        mode = "hardened" if _vault_core.is_hardened() else "oss"
-    except Exception:
-        mode = "oss"
+# Vault mode marker schema (F4/F7, S0.7).
+# Values written to ~/.config/pop-pay/.vault_mode:
+#   - passphrase        — key derived from user passphrase (PBKDF2), kept in OS keyring
+#   - machine-hardened  — machine-derived key using CI-injected compiled salt
+#   - machine-oss       — machine-derived key using public OSS salt
+#   - unknown           — marker file missing
+# Legacy values ("hardened", "oss") are migrated on read; next save_vault
+# rewrites the file in the new schema.
+VAULT_MODES = ("passphrase", "machine-hardened", "machine-oss", "unknown")
+
+
+def _write_vault_mode(is_passphrase: bool = False):
+    """Write .vault_mode marker. Schema: passphrase / machine-hardened / machine-oss."""
+    if is_passphrase:
+        mode = "passphrase"
+    else:
+        try:
+            from pop_pay.engine import _vault_core
+            mode = "machine-hardened" if _vault_core.is_hardened() else "machine-oss"
+        except Exception:
+            mode = "machine-oss"
     marker = VAULT_DIR / ".vault_mode"
     marker.write_text(mode)
     marker.chmod(0o600)
 
 
 def _read_vault_mode() -> str:
-    """Return 'hardened', 'oss', or 'unknown' if marker missing."""
+    """Return current vault mode string; migrates legacy 'hardened'/'oss' values."""
     marker = VAULT_DIR / ".vault_mode"
-    if marker.exists():
-        return marker.read_text().strip()
+    if not marker.exists():
+        return "unknown"
+    raw = marker.read_text().strip()
+    # Migrate pre-S0.7 legacy values
+    if raw == "hardened":
+        return "machine-hardened"
+    if raw == "oss":
+        return "machine-oss"
+    if raw in VAULT_MODES:
+        return raw
     return "unknown"
 
 
@@ -251,7 +273,7 @@ def load_vault() -> dict:
     """
     # Downgrade check: vault marker says hardened but .so is gone
     vault_mode = _read_vault_mode()
-    if vault_mode == "hardened":
+    if vault_mode == "machine-hardened":
         try:
             from pop_pay.engine import _vault_core
             if not _vault_core.is_hardened():
@@ -300,8 +322,8 @@ def save_vault(creds: dict, key_override: bytes = None):
             decrypt_credentials(VAULT_PATH.read_bytes())
     except ValueError as e:
         raise RuntimeError(f"Vault write verification failed: {e}")
-    # Write mode marker so load_vault and pop-init-vault can detect downgrade attacks
-    _write_vault_mode()
+    # Write mode marker — F4/F7: passphrase / machine-hardened / machine-oss
+    _write_vault_mode(is_passphrase=key_override is not None)
 
 
 def secure_wipe_env(env_path: Path):

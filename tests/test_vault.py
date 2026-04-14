@@ -127,3 +127,68 @@ def test_virtual_seal_repr_redacted():
     assert "4111111111111111" not in r, "repr() must not expose card_number"
     assert "999" not in r, "repr() must not expose CVV"
     assert "REDACTED" in r or "****" in r, "repr() should indicate redaction"
+
+
+# ---------------------------------------------------------------------------
+# F4/F7: Vault marker schema + downgrade refuse (S0.7)
+# ---------------------------------------------------------------------------
+
+def test_vault_mode_legacy_hardened_migrates(tmp_path, monkeypatch):
+    """Legacy 'hardened' marker must be read as 'machine-hardened'."""
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    (tmp_path / ".vault_mode").write_text("hardened")
+    assert vault_mod._read_vault_mode() == "machine-hardened"
+
+
+def test_vault_mode_legacy_oss_migrates(tmp_path, monkeypatch):
+    """Legacy 'oss' marker must be read as 'machine-oss'."""
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    (tmp_path / ".vault_mode").write_text("oss")
+    assert vault_mod._read_vault_mode() == "machine-oss"
+
+
+def test_vault_mode_missing_returns_unknown(tmp_path, monkeypatch):
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    assert vault_mod._read_vault_mode() == "unknown"
+
+
+def test_vault_mode_passphrase_write(tmp_path, monkeypatch):
+    """is_passphrase=True writes 'passphrase' regardless of is_hardened."""
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    vault_mod._write_vault_mode(is_passphrase=True)
+    assert (tmp_path / ".vault_mode").read_text() == "passphrase"
+
+
+def test_vault_load_refuses_downgrade_machine_hardened(tmp_path, monkeypatch):
+    """Marker says 'machine-hardened' but native reports not-hardened → refuse."""
+    pytest.importorskip("cryptography")
+    import pop_pay.vault as vault_mod
+    from pop_pay.engine import _vault_core
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    monkeypatch.setattr(vault_mod, "VAULT_PATH", tmp_path / "vault.enc")
+    (tmp_path / ".vault_mode").write_text("machine-hardened")
+    (tmp_path / "vault.enc").write_bytes(b"\x00" * 64)  # stub blob
+
+    monkeypatch.setattr(_vault_core, "is_hardened", lambda: False)
+    with pytest.raises(RuntimeError, match="hardened"):
+        vault_mod.load_vault()
+
+
+def test_vault_load_refuses_downgrade_legacy_hardened_marker(tmp_path, monkeypatch):
+    """Legacy 'hardened' marker (migrated to machine-hardened on read) must also refuse."""
+    pytest.importorskip("cryptography")
+    import pop_pay.vault as vault_mod
+    from pop_pay.engine import _vault_core
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    monkeypatch.setattr(vault_mod, "VAULT_PATH", tmp_path / "vault.enc")
+    (tmp_path / ".vault_mode").write_text("hardened")  # pre-S0.7 value
+    (tmp_path / "vault.enc").write_bytes(b"\x00" * 64)
+
+    monkeypatch.setattr(_vault_core, "is_hardened", lambda: False)
+    with pytest.raises(RuntimeError, match="hardened"):
+        vault_mod.load_vault()

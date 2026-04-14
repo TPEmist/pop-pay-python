@@ -27,7 +27,7 @@ def cmd_init_vault():
     if vault_exists():
         # Downgrade guard: refuse to overwrite a hardened vault from an OSS build
         vault_mode = _read_vault_mode()
-        if vault_mode == "hardened":
+        if vault_mode == "machine-hardened":
             try:
                 from pop_pay.engine import _vault_core
                 is_hardened = _vault_core.is_hardened()
