@@ -20,6 +20,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from pop_pay.errors import VaultDecryptFailed, VaultNotFound, VaultLocked
+
 # AES-256-GCM via cryptography library (pip install cryptography)
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -156,11 +158,17 @@ def store_key_in_keyring(key: bytes):
     """Store derived key in OS keyring (macOS Keychain / Linux libsecret / Windows Credential Manager)."""
     try:
         import keyring
-        keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, key.hex())
     except ImportError:
         raise ImportError(
             "keyring package required for passphrase mode. "
             "Install with: pip install 'pop-pay[passphrase]'"
+        )
+    try:
+        keyring.set_password(KEYRING_SERVICE, KEYRING_USERNAME, key.hex())
+    except Exception as e:
+        raise VaultLocked(
+            "Failed to store derived key in OS keyring.",
+            cause=e,
         )
 
 
@@ -203,16 +211,16 @@ def decrypt_credentials(blob: bytes, salt: bytes = None, key_override: bytes = N
     if AESGCM is None:
         raise ImportError("cryptography package required: pip install 'pop-pay[vault]'")
     if len(blob) < 28:  # 12 nonce + at least 16 GCM tag
-        raise ValueError("vault.enc is corrupted or too small")
+        raise VaultDecryptFailed("vault.enc is corrupted or too small")
     key = _derive_key(salt, key_override=key_override)
     nonce, ciphertext = blob[:12], blob[12:]
     aesgcm = AESGCM(key)
     try:
         plaintext = aesgcm.decrypt(nonce, ciphertext, None)
-    except Exception:
-        raise ValueError(
-            "Failed to decrypt vault — wrong key (machine changed?) or corrupted vault.\n"
-            "Re-run: pop-pay init-vault"
+    except Exception as e:
+        raise VaultDecryptFailed(
+            "Failed to decrypt vault — wrong key (machine changed?) or corrupted vault.",
+            cause=e,
         )
     return json.loads(plaintext)
 
@@ -271,6 +279,9 @@ def load_vault() -> dict:
     This prevents an attacker from deleting the .so to force re-initialization
     with the weaker public salt.
     """
+    if not VAULT_PATH.exists():
+        raise VaultNotFound()
+
     # Downgrade check: vault marker says hardened but .so is gone
     vault_mode = _read_vault_mode()
     if vault_mode == "machine-hardened":
@@ -296,7 +307,7 @@ def load_vault() -> dict:
     if passphrase_key is not None:
         try:
             return decrypt_credentials(blob, key_override=passphrase_key)
-        except ValueError:
+        except VaultDecryptFailed:
             pass  # Wrong key — fall through to machine-derived key
     return decrypt_credentials(blob)
 
@@ -320,7 +331,7 @@ def save_vault(creds: dict, key_override: bytes = None):
             decrypt_credentials(VAULT_PATH.read_bytes(), key_override=key_override)
         else:
             decrypt_credentials(VAULT_PATH.read_bytes())
-    except ValueError as e:
+    except VaultDecryptFailed as e:
         raise RuntimeError(f"Vault write verification failed: {e}")
     # Write mode marker — F4/F7: passphrase / machine-hardened / machine-oss
     _write_vault_mode(is_passphrase=key_override is not None)
