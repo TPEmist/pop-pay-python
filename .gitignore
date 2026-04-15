@@ -38,3 +38,5 @@ pop_pay/engine/_vault_core.cpython-*.pyd
 build/
 *.egg-info/
 docs/ENV_REFERENCE.md
+
+temp_trash/
