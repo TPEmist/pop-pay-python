@@ -233,3 +233,79 @@ def test_vault_load_refuses_downgrade_legacy_hardened_marker(tmp_path, monkeypat
     monkeypatch.setattr(_vault_core, "is_hardened", lambda: False)
     with pytest.raises(RuntimeError, match="hardened"):
         vault_mod.load_vault()
+
+
+# ---------------------------------------------------------------------------
+# F1: plaintext PAN/CVV must not leak into os.environ or child processes
+# ---------------------------------------------------------------------------
+
+def test_filtered_env_strips_all_byoc_keys():
+    from pop_pay.vault import filtered_env, SENSITIVE_ENV_KEYS
+    base = {
+        "POP_BYOC_NUMBER": "4111111111111111",
+        "POP_BYOC_CVV": "123",
+        "POP_BYOC_EXP_MONTH": "12",
+        "POP_BYOC_EXP_YEAR": "27",
+        "HARMLESS": "ok",
+    }
+    out = filtered_env(base)
+    for k in SENSITIVE_ENV_KEYS:
+        assert k not in out
+    assert out["HARMLESS"] == "ok"
+
+
+def test_sensitive_env_keys_is_immutable_and_complete():
+    from pop_pay.vault import SENSITIVE_ENV_KEYS
+    assert "POP_BYOC_NUMBER" in SENSITIVE_ENV_KEYS
+    assert "POP_BYOC_CVV" in SENSITIVE_ENV_KEYS
+    assert "POP_BYOC_EXP_MONTH" in SENSITIVE_ENV_KEYS
+    assert "POP_BYOC_EXP_YEAR" in SENSITIVE_ENV_KEYS
+    assert isinstance(SENSITIVE_ENV_KEYS, tuple)
+
+
+def test_child_process_with_filtered_env_cannot_see_byoc(monkeypatch):
+    """Spawn a child via subprocess using filtered_env; BYOC vars must be absent."""
+    import subprocess, sys, json as _json
+    from pop_pay.vault import filtered_env
+    monkeypatch.setenv("POP_BYOC_NUMBER", "4111111111111111")
+    monkeypatch.setenv("POP_BYOC_CVV", "123")
+    code = (
+        "import os,json; "
+        "print(json.dumps({k: os.environ.get(k) for k in "
+        "('POP_BYOC_NUMBER','POP_BYOC_CVV','POP_BYOC_EXP_MONTH','POP_BYOC_EXP_YEAR')}))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=filtered_env(),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    seen = _json.loads(result.stdout)
+    assert all(v is None for v in seen.values()), seen
+
+
+def test_load_vault_does_not_inject_byoc_into_environ(tmp_path, monkeypatch):
+    """F1 post-condition: load_vault must not populate os.environ with plaintext."""
+    pytest.importorskip("cryptography")
+    import pop_pay.vault as vault_mod
+    from pop_pay.vault import SENSITIVE_ENV_KEYS
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    monkeypatch.setattr(vault_mod, "VAULT_PATH", tmp_path / "vault.enc")
+    (tmp_path / ".vault_mode").write_text("machine-hardened")
+    creds = {"card_number": "4111111111111111", "cvv": "999", "expiration_date": "12/28"}
+    blob = vault_mod.encrypt_credentials(creds)
+    (tmp_path / "vault.enc").write_bytes(blob)
+    try:
+        from pop_pay.engine import _vault_core
+        monkeypatch.setattr(_vault_core, "is_hardened", lambda: True)
+    except ImportError:
+        pass
+    for k in SENSITIVE_ENV_KEYS:
+        monkeypatch.delenv(k, raising=False)
+    try:
+        vault_mod.load_vault()
+    except Exception:
+        pass
+    for k in SENSITIVE_ENV_KEYS:
+        assert k not in os.environ, f"load_vault leaked {k} into os.environ"
