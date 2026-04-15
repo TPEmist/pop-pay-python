@@ -66,7 +66,7 @@ _HIDDEN_STYLE_RE = re.compile(
 )
 _PRICE_RE = re.compile(r'[\$£€¥]\s?\d+(?:\.\d{2})?')
 
-mcp = FastMCP("pop-pay")
+mcp = FastMCP("pop-pay", streamable_http_path="/")
 
 # ---------------------------------------------------------------------------
 # Load configuration from environment
@@ -736,6 +736,70 @@ async def request_x402_payment(
     )
 
 
-if __name__ == "__main__":
+def _run_pipe():
+    """Default launcher transport: stdio. Preserves Claude Desktop config compat."""
     mcp.run()
-()
+
+
+def _run_tcp():
+    """S0.7 F6(A): attacher transport — StreamableHTTP on 127.0.0.1:<ephemeral>,
+    Bearer-token gated. Token + port written to ~/.config/pop-pay/.attach_{token,port}.
+    """
+    import sys as _sys
+    import uvicorn
+    from starlette.middleware import Middleware
+    from pop_pay.transport import (
+        generate_attach_token,
+        write_attach_artifacts,
+        clear_attach_artifacts,
+        pick_ephemeral_port,
+        make_bearer_middleware,
+        TOKEN_PATH,
+        PORT_PATH,
+    )
+
+    token = generate_attach_token()
+    port = pick_ephemeral_port()
+    write_attach_artifacts(token, port)
+
+    bearer_mw = make_bearer_middleware(token)
+    app = mcp.streamable_http_app()
+    app.user_middleware.insert(0, Middleware(bearer_mw))
+    app.middleware_stack = app.build_middleware_stack()
+
+    _sys.stderr.write(
+        f"pop-pay MCP server listening on http://127.0.0.1:{port}/mcp\n"
+        f"  token: {TOKEN_PATH}\n"
+        f"  port:  {PORT_PATH}\n"
+        f"Attach with: Authorization: Bearer $(cat {TOKEN_PATH})\n"
+    )
+    # Ensure token + port files are wiped on SIGTERM/SIGINT (uvicorn intercepts
+    # signals before our try/finally can fire).
+    import atexit, signal
+    atexit.register(clear_attach_artifacts)
+    def _signal_cleanup(signum, frame):
+        clear_attach_artifacts()
+        _sys.exit(0)
+    for _sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(_sig, _signal_cleanup)
+        except (ValueError, OSError):
+            pass
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    finally:
+        clear_attach_artifacts()
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="pop-pay MCP server")
+    parser.add_argument(
+        "--transport", choices=("pipe", "tcp"), default="pipe",
+        help="pipe = stdio (default, Claude Desktop compat); tcp = StreamableHTTP+Bearer on 127.0.0.1",
+    )
+    args = parser.parse_args()
+    if args.transport == "tcp":
+        _run_tcp()
+    else:
+        _run_pipe()
