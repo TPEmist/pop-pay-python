@@ -316,9 +316,69 @@ def load_vault() -> dict:
     return decrypt_credentials(blob)
 
 
+def cleanup_stale_temp_files() -> None:
+    """F8: enumerate stale vault.enc*.tmp siblings and securely overwrite + unlink.
+
+    A previous crashed save can leave a `.tmp` sibling that may still hold
+    ciphertext bytes; we treat them as sensitive. Best-effort.
+    """
+    if not VAULT_DIR.exists():
+        return
+    try:
+        entries = list(VAULT_DIR.iterdir())
+    except OSError:
+        return
+    for p in entries:
+        name = p.name
+        if not (name.startswith("vault.enc") and name.endswith(".tmp")):
+            continue
+        try:
+            size = p.stat().st_size
+            if size > 0:
+                with p.open("r+b") as f:
+                    f.write(b"\x00" * size)
+                    f.flush()
+                    os.fsync(f.fileno())
+            p.unlink()
+        except OSError:
+            pass
+
+
+def wipe_vault_artifacts() -> list:
+    """F8: enumerate every credential-bearing artifact under VAULT_DIR and
+    securely overwrite + unlink. Also clears the OS keyring. Returns the
+    list of paths that were wiped."""
+    wiped = []
+    if VAULT_DIR.exists():
+        try:
+            entries = list(VAULT_DIR.iterdir())
+        except OSError:
+            entries = []
+        sensitive_names = {".vault_mode", ".machine_id"}
+        for p in entries:
+            name = p.name
+            is_vault_blob = name == "vault.enc" or (name.startswith("vault.enc") and name.endswith(".tmp"))
+            if not (is_vault_blob or name in sensitive_names):
+                continue
+            try:
+                size = p.stat().st_size
+                if size > 0:
+                    with p.open("r+b") as f:
+                        f.write(b"\x00" * size)
+                        f.flush()
+                        os.fsync(f.fileno())
+                p.unlink()
+                wiped.append(str(p))
+            except OSError:
+                pass
+    clear_keyring()
+    return wiped
+
+
 def save_vault(creds: dict, key_override: bytes = None):
     """Encrypt and atomically write credentials to vault.enc."""
     VAULT_DIR.mkdir(parents=True, exist_ok=True)
+    cleanup_stale_temp_files()  # F8: sweep prior crashed writes
     blob = encrypt_credentials(creds, key_override=key_override)
     # Atomic write: tmp → fsync → rename
     tmp_path = VAULT_PATH.with_suffix(".enc.tmp")

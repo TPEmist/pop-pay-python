@@ -6,7 +6,7 @@ from pathlib import Path
 from pop_pay.vault import (
     save_vault, vault_exists, secure_wipe_env,
     VAULT_DIR, VAULT_PATH, OSS_WARNING,
-    _read_vault_mode,
+    _read_vault_mode, wipe_vault_artifacts,
 )
 
 
@@ -15,7 +15,28 @@ def cmd_init_vault():
     parser = argparse.ArgumentParser(description="Initialize pop-pay credential vault")
     parser.add_argument("--passphrase", action="store_true",
                         help="Protect vault with a passphrase (stronger; requires pop-unlock each session)")
+    parser.add_argument("--wipe", action="store_true",
+                        help="F8: securely wipe all vault artifacts (vault.enc, .vault_mode, .machine_id, stale .tmp) and clear keyring, then exit.")
+    parser.add_argument("--yes", action="store_true",
+                        help="Skip confirmation prompts (used with --wipe).")
     args = parser.parse_args()
+
+    if args.wipe:
+        if not args.yes and sys.stdin.isatty():
+            ack = input(
+                "Wipe ALL pop-pay vault artifacts (vault.enc, .vault_mode, keyring, stale .tmp)? [y/N]: "
+            ).strip().lower()
+            if ack != "y":
+                print("Aborted.")
+                sys.exit(0)
+        wiped = wipe_vault_artifacts()
+        if not wiped:
+            print("No vault artifacts found.")
+        else:
+            for p in wiped:
+                print(f"wiped: {p}")
+        print("Keyring entry cleared.")
+        sys.exit(0)
 
     print("pop-pay vault setup")
     print("=" * 40)

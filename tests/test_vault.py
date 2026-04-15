@@ -309,3 +309,67 @@ def test_load_vault_does_not_inject_byoc_into_environ(tmp_path, monkeypatch):
         pass
     for k in SENSITIVE_ENV_KEYS:
         assert k not in os.environ, f"load_vault leaked {k} into os.environ"
+
+
+# ---------------------------------------------------------------------------
+# F8: stale .tmp cleanup + wipe_vault_artifacts (S0.7)
+# ---------------------------------------------------------------------------
+
+def test_cleanup_stale_temp_files_wipes_siblings(tmp_path, monkeypatch):
+    """cleanup_stale_temp_files removes vault.enc*.tmp siblings."""
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    stale1 = tmp_path / "vault.enc.tmp"
+    stale2 = tmp_path / "vault.enc.abc.tmp"
+    keep = tmp_path / "vault.enc"
+    other = tmp_path / "unrelated.tmp"
+    for p in (stale1, stale2, keep, other):
+        p.write_bytes(b"secret-data")
+    vault_mod.cleanup_stale_temp_files()
+    assert not stale1.exists()
+    assert not stale2.exists()
+    assert keep.exists(), "vault.enc must not be wiped"
+    assert other.exists(), "unrelated .tmp must not be wiped"
+
+
+def test_wipe_vault_artifacts_enumerates_all_credential_files(tmp_path, monkeypatch):
+    """wipe_vault_artifacts removes vault.enc, .tmp siblings, .vault_mode, .machine_id."""
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    targets = [
+        tmp_path / "vault.enc",
+        tmp_path / "vault.enc.tmp",
+        tmp_path / ".vault_mode",
+        tmp_path / ".machine_id",
+    ]
+    keep = tmp_path / "policy.env"
+    for p in targets:
+        p.write_bytes(b"x" * 16)
+    keep.write_bytes(b"keep-me")
+    wiped = vault_mod.wipe_vault_artifacts()
+    for p in targets:
+        assert not p.exists(), f"{p.name} should have been wiped"
+    assert keep.exists(), "non-credential file must not be wiped"
+    assert len(wiped) == 4
+
+
+def test_wipe_vault_artifacts_idempotent_on_empty_dir(tmp_path, monkeypatch):
+    """wipe_vault_artifacts on empty dir returns [] and does not throw."""
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    wiped = vault_mod.wipe_vault_artifacts()
+    assert wiped == []
+
+
+def test_save_vault_sweeps_stale_tmp_before_writing(tmp_path, monkeypatch):
+    """save_vault calls cleanup_stale_temp_files — pre-existing stale .tmp gone after save."""
+    pytest.importorskip("cryptography")
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+    monkeypatch.setattr(vault_mod, "VAULT_PATH", tmp_path / "vault.enc")
+    stale = tmp_path / "vault.enc.stale.tmp"
+    stale.write_bytes(b"old-ciphertext")
+    creds = {"card_number": "4111111111111111", "cvv": "123", "expiration_date": "12/28"}
+    vault_mod.save_vault(creds)
+    assert not stale.exists(), "save_vault should have swept stale .tmp"
+    assert (tmp_path / "vault.enc").exists()
