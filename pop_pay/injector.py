@@ -32,28 +32,11 @@ logger = logging.getLogger(__name__)
 
 
 # RT-2 R2 Fix 3: PAN/CVV are wrapped in SecretStr (pop_pay.core.secret_str)
-# — a frozen dataclass that is NOT a str subclass. Unlike the legacy
-# _SecretStr(str) shim kept below for bisect, string operations (.encode,
-# concat, slicing, json.dumps, pickle) do NOT leak plaintext. Release points
-# must call .reveal() explicitly; the presence of .reveal() in the source is
-# the audit footprint. Old _SecretStr remains defined but unused in this
-# commit; it is deleted in Fix 3.6.
+# — a frozen dataclass that is NOT a str subclass. String operations
+# (.encode, concat, slicing, json.dumps, pickle) do NOT leak plaintext.
+# Release points must call .reveal() explicitly; the presence of .reveal()
+# in the source is the audit footprint.
 from pop_pay.core.secret_str import SecretStr
-
-
-class _SecretStr(str):
-    """Legacy str-subclass shim. Superseded by SecretStr (dataclass).
-    Deleted in Fix 3.6 after all call sites have migrated."""
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return "'***REDACTED***'"
-
-    def __str__(self) -> str:
-        return "***REDACTED***"
-
-    def __format__(self, spec: str) -> str:
-        return "***REDACTED***"
 
 
 def _seal(value) -> SecretStr:
