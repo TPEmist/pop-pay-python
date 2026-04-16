@@ -12,7 +12,13 @@ wheels/
 # Project specific
 .env
 *.db
+# RT-2 R2 Fix 6 — SQLite WAL + shared-memory sidecars can briefly carry
+# plaintext card_number residue between migration and VACUUM. Ignore them
+# so they never land in git even if a dev runs `git add -A` mid-session.
+*.db-wal
+*.db-shm
 pop_state.db
+aegis_state.db*
 MEMORY.md
 skills/
 run_parallel.sh
