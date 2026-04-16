@@ -33,6 +33,25 @@ Seven-fix bundle addressing a Round 2 red-team finding where plaintext PAN data 
 ### Notes
 - `masked_card` rows written by v0.8.7 / v0.8.8 (AES-GCM-encrypted base64) will render as base64 in the dashboard after this upgrade. Not a silent failure mode — the stored string is simply no longer decoded post-Fix 4. Supported remediation: `pop-init-vault --wipe` + fresh seal generation.
 
+### Fix 8 — Public-docs privacy hardening
+
+Removed internal-intent threat-model and methodology docs from the public
+PyPI/GitHub tree. These documents were written for internal review and
+reference attacker playbooks and specific bypass hypotheses that should
+not ship with the public package.
+
+- Deleted: `docs/CATEGORIES_DECISION_CRITERIA.md` (940-byte mirror stub; bucket criteria inlined into `docs/GUARDRAIL_BENCHMARK.md` §B-class decision).
+- Moved: `docs/benchmark-history/` → `docs/internal/benchmark-history/`.
+- Cleaned up 2 dangling refs in `tests/redteam/` (aggregator docstring collapsed, parity-contract bullet rephrased); patched a broken `AGENT_COMMERCE_THREAT_MODEL.md` cross-reference paragraph in `docs/VAULT_THREAT_MODEL.md` (link was broken pre-Fix 8; cleaned up regardless).
+- Polished `docs/GUARDRAIL_BENCHMARK.md`: TL;DR added; v0 retraction made explicit; Competitive Comparison section removed; Reproducing a run merged; terminology tightened.
+- Parity with TS repo commits `dcac814`, `efd3ada`, `261981f`, `3efdbba`.
+
+**Correction (pre-existing inconsistency fixed as side effect):** An earlier draft of the related internal spec referenced a 4-bucket variant of the §B-class decision thresholds. The 3-bucket matrix in `docs/GUARDRAIL_BENCHMARK.md` §B-class decision is the authoritative source of truth; the 4-bucket variant was a stale draft and should not be cited.
+
+**Pending (v0.8.10):** Ollama batch 1 sweep (TS-side side-channel) complete (290 rows, 0 errors, α recommendation). Results + per-runner table + Category-C TBD resolution will append to `docs/GUARDRAIL_BENCHMARK.md` in v0.8.10 once this release ships.
+
+**Security rationale:** Public docs should document product behavior, not the adversary's attack surface or our internal deprecation calculus.
+
 [0.8.9]: https://github.com/100xPercent/pop-pay-python/compare/v0.8.8...v0.8.9
 
 ## [0.8.8] - 2026-04-15
