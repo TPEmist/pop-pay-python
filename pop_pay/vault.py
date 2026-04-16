@@ -188,7 +188,11 @@ def clear_keyring():
     """Remove derived key from OS keyring (called on vault update or explicit lock)."""
     try:
         import keyring
-        keyring.delete_password(KEYRING_SERVICE, KEYRING_USERNAME)
+        try:
+            keyring.delete_password(KEYRING_SERVICE, KEYRING_USERNAME)
+        except keyring.errors.PasswordDeleteError:
+            # RT-2 Fix 7: entry already absent — idempotent no-op, matches filesystem wipe semantics
+            pass
     except (ImportError, RuntimeError):
         pass
 

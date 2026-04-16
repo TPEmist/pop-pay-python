@@ -2,14 +2,15 @@ import pytest
 import uuid
 from pop_pay.client import PopClient
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy, VirtualSeal
+from pop_pay.core.secret_str import SecretStr
 from pop_pay.providers.base import VirtualCardProvider
 
 class MockProvider(VirtualCardProvider):
     async def issue_card(self, intent: PaymentIntent, policy: GuardrailPolicy) -> VirtualSeal:
         return VirtualSeal(
             seal_id=str(uuid.uuid4()),
-            card_number="1234567812345678",
-            cvv="123",
+            card_number=SecretStr("1234567812345678"),
+            cvv=SecretStr("123"),
             expiration_date="12/26",
             authorized_amount=intent.requested_amount,
             status="Issued"

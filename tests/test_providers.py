@@ -24,9 +24,11 @@ async def test_issue_card_success():
     
     assert seal.status == "Issued"
     assert seal.card_number is not None
-    assert len(seal.card_number) == 16
+    # RT-2 R2 Fix 3 — SecretStr has no len(); reveal() gives the plaintext
+    # for provider-roundtrip assertions.
+    assert len(seal.card_number.reveal()) == 16
     assert seal.cvv is not None
-    assert len(seal.cvv) == 3
+    assert len(seal.cvv.reveal()) == 3
     assert seal.expiration_date is not None
     assert len(seal.expiration_date) == 5
     assert seal.authorized_amount == 50.0

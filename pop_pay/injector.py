@@ -31,27 +31,19 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-# S0.7 F5: PAN/CVV wrapper that masks in repr/str/format so exception
-# tracebacks with show_locals (rich.traceback, sys.excepthook) cannot leak
-# plaintext. The underlying Unicode data is preserved for JSON serialization
-# and Playwright .fill() calls; only Python-level display renders the mask.
-class _SecretStr(str):
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return "'***REDACTED***'"
-
-    def __str__(self) -> str:
-        return "***REDACTED***"
-
-    def __format__(self, spec: str) -> str:
-        return "***REDACTED***"
+# RT-2 R2 Fix 3: PAN/CVV are wrapped in SecretStr (pop_pay.core.secret_str)
+# — a frozen dataclass that is NOT a str subclass. String operations
+# (.encode, concat, slicing, json.dumps, pickle) do NOT leak plaintext.
+# Release points must call .reveal() explicitly; the presence of .reveal()
+# in the source is the audit footprint.
+from pop_pay.core.secret_str import SecretStr
 
 
-def _seal(value: str) -> str:
-    if isinstance(value, _SecretStr) or not value:
+def _seal(value) -> SecretStr:
+    """Wrap a plaintext string in a SecretStr. Idempotent on SecretStr."""
+    if isinstance(value, SecretStr):
         return value
-    return _SecretStr(value)
+    return SecretStr(value or "")
 
 
 # S0.7 F6(b): detect Chrome instances launched with verbose logging flags that
@@ -696,12 +688,17 @@ class PopBrowserInjector:
     # ------------------------------------------------------------------
 
     async def _fill_across_frames(
-        self, page, card_number: str, expiry: str, cvv: str
+        self, page, card_number: SecretStr, expiry: SecretStr, cvv: SecretStr
     ) -> bool:
         """
         Walk every frame in the page tree (flat list from Playwright includes
         all nested iframes). Return True as soon as the card number is filled.
         """
+        # Defense in depth: coerce plain str to SecretStr at helper entry.
+        # inject_payment_info already seals at the public boundary; this
+        # guards any direct internal caller (e.g. unit tests) from bypassing
+        # the wrapper.
+        card_number, expiry, cvv = _seal(card_number), _seal(expiry), _seal(cvv)
         all_frames = page.frames  # includes main frame + all nested iframes
         card_filled = False
 
@@ -723,12 +720,13 @@ class PopBrowserInjector:
         return card_filled
 
     async def _fill_card_in_shadow_dom(
-        self, page, card_number: str, expiry: str, cvv: str
+        self, page, card_number: SecretStr, expiry: SecretStr, cvv: SecretStr
     ) -> bool:
         """
         Search for card fields inside Shadow DOM trees using recursive
         queryShadowAll and fill them via native setters + event dispatch.
         """
+        card_number, expiry, cvv = _seal(card_number), _seal(expiry), _seal(cvv)
         try:
             card_selectors = ", ".join(CARD_NUMBER_SELECTORS)
             expiry_selectors = ", ".join(EXPIRY_SELECTORS)
@@ -783,8 +781,12 @@ class PopBrowserInjector:
                 return cardFilled;
             }
             """
+            # RT-2 Fix 3: Playwright serializes the arg list via JSON. Without
+            # .reveal() the dataclass raises TypeError here — the TypeError
+            # itself is the guardrail: no SecretStr can cross a JSON boundary
+            # silently.
             result = await page.evaluate(script, [
-                card_number, expiry, cvv,
+                card_number.reveal(), expiry.reveal(), cvv.reveal(),
                 card_selectors, expiry_selectors, cvv_selectors
             ])
             return bool(result)
@@ -793,29 +795,30 @@ class PopBrowserInjector:
             return False
 
     async def _fill_in_frame(
-        self, frame, card_number: str, expiry: str, cvv: str
+        self, frame, card_number: SecretStr, expiry: SecretStr, cvv: SecretStr
     ) -> bool:
         """
         Attempt to fill card fields inside a single frame.
         Returns True if the card number field was found and filled; False otherwise.
         """
+        card_number, expiry, cvv = _seal(card_number), _seal(expiry), _seal(cvv)
         card_locator = await self._find_visible_locator(frame, CARD_NUMBER_SELECTORS)
         if card_locator is None:
             return False
 
-        await card_locator.fill(card_number)
+        await card_locator.fill(card_number.reveal())
         logger.info(
             "PopBrowserInjector: ✅ card number injected in frame '%s'", frame.url
         )
 
         expiry_locator = await self._find_visible_locator(frame, EXPIRY_SELECTORS)
         if expiry_locator:
-            await expiry_locator.fill(expiry)
+            await expiry_locator.fill(expiry.reveal())
             logger.info("PopBrowserInjector: expiry injected.")
 
         cvv_locator = await self._find_visible_locator(frame, CVV_SELECTORS)
         if cvv_locator:
-            await cvv_locator.fill(cvv)
+            await cvv_locator.fill(cvv.reveal())
             logger.info("PopBrowserInjector: CVV injected.")
 
         return True

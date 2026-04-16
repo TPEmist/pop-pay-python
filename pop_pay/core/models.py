@@ -1,5 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional
+
+from pop_pay.core.secret_str import SecretStr
 
 class GuardrailPolicy(BaseModel):
     allowed_categories: List[str] = Field(default_factory=list, description="Categories allowed for payment")
@@ -16,9 +18,14 @@ class PaymentIntent(BaseModel):
     page_url: Optional[str] = Field(default=None, description="Current checkout page URL for domain validation")
 
 class VirtualSeal(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     seal_id: str = Field(..., description="Unique ID for the virtual seal")
-    card_number: Optional[str] = Field(default=None, description="Virtual credit card number")
-    cvv: Optional[str] = Field(default=None, description="CVV security code")
+    # RT-2 R2 Fix 3 — PAN/CVV wrapped in SecretStr to prevent accidental leaks
+    # through __str__, __repr__, f-string, json.dumps, pickle, slicing, .encode().
+    # expiration_date stays as str (non-sensitive, must render in UX messages).
+    card_number: Optional[SecretStr] = Field(default=None, description="Virtual credit card number")
+    cvv: Optional[SecretStr] = Field(default=None, description="CVV security code")
     expiration_date: Optional[str] = Field(default=None, description="Expiration date in MM/YY format")
     authorized_amount: float = Field(..., ge=0, description="Amount authorized on the seal")
     status: str = Field(default="Issued", description="Status of the seal (e.g., Issued, Rejected, Revoked)")

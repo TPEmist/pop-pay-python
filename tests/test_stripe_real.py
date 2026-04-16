@@ -71,8 +71,9 @@ async def test_issue_card_success(provider):
         )
         
         assert seal.status == "Issued"
-        assert seal.card_number == "****4242"
-        assert seal.cvv == "***"
+        # RT-2 R2 Fix 3 — PAN/CVV wrapped in SecretStr; compare via .reveal().
+        assert seal.card_number.reveal() == "****4242"
+        assert seal.cvv.reveal() == "***"
         assert seal.expiration_date == "12/2026"
         assert seal.authorized_amount == 50.0
 

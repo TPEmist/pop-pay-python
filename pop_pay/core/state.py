@@ -1,11 +1,6 @@
 import sqlite3
 import os
-import base64
-import hashlib
-import hmac
-import socket
 from datetime import date, datetime, timezone
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 DEFAULT_DB_PATH = os.path.join(os.path.expanduser("~"), ".config", "pop-pay", "pop_state.db")
 
@@ -18,49 +13,22 @@ class PopStateTracker:
         # We keep the connection open for the lifetime of the tracker
         # This is especially important for :memory: databases
         self.conn = sqlite3.connect(self.db_path)
+        # RT-2 R2 N2: owner-only permissions on the DB file. POSIX only;
+        # Windows ACLs are intentionally out of scope for this fix.
+        if db_path != ":memory:":
+            try:
+                os.chmod(self.db_path, 0o600)
+            except (OSError, NotImplementedError):
+                pass
         self._init_db()
         self.daily_spend_total = self._get_today_spent()
 
-    def _get_encryption_key(self) -> bytes:
-        """Get the encryption key from env or fallback to host-specific HMAC."""
-        key_hex = os.environ.get("POP_STATE_ENCRYPTION_KEY")
-        if key_hex:
-            try:
-                return bytes.fromhex(key_hex)
-            except ValueError:
-                pass
-        # Fallback: HMAC-SHA256 of hostname for machine-specific at-rest security
-        return hmac.new(b"pop-pay-state-salt", socket.gethostname().encode(), hashlib.sha256).digest()
-
-    def _encrypt_field(self, value: str | None) -> str | None:
-        """Encrypt a string field using AES-256-GCM."""
-        if value is None:
-            return None
-        key = self._get_encryption_key()
-        aesgcm = AESGCM(key)
-        nonce = os.urandom(12)
-        ciphertext = aesgcm.encrypt(nonce, value.encode(), None)
-        return base64.b64encode(nonce + ciphertext).decode('utf-8')
-
-    def _decrypt_field(self, encrypted: str | None) -> str | None:
-        """Decrypt a string field. Fallbacks to raw value if decryption fails."""
-        if encrypted is None:
-            return None
-        try:
-            data = base64.b64decode(encrypted)
-            if len(data) < 12:
-                return encrypted
-            nonce = data[:12]
-            ciphertext = data[12:]
-            key = self._get_encryption_key()
-            aesgcm = AESGCM(key)
-            decrypted = aesgcm.decrypt(nonce, ciphertext, None)
-            return decrypted.decode('utf-8')
-        except (ValueError, UnicodeDecodeError, OSError):
-            return encrypted  # Fallback to raw value (for legacy unencrypted data)
-
     def _init_db(self):
         cursor = self.conn.cursor()
+        # RT-2 R2 N1: secure_delete overwrites freed pages during DELETE
+        # and VACUUM, so legacy card_number residue in the freelist is
+        # zeroed rather than left as readable plaintext.
+        cursor.execute("PRAGMA secure_delete = ON")
         # Create daily_budget table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS daily_budget (
@@ -164,6 +132,18 @@ class PopStateTracker:
             cursor.execute("ALTER TABLE audit_log ADD COLUMN rejection_reason TEXT")
         self.conn.commit()
 
+        # RT-2 R2 N1: one-time VACUUM to rewrite all pages, including the
+        # freelist pages that still hold plaintext card_number data after
+        # the legacy DROP TABLE + RENAME. secure_delete (set in _init_db)
+        # determines the fill pattern for freed pages. Idempotent via
+        # user_version — re-opening an already-migrated DB skips the VACUUM.
+        cursor.execute("PRAGMA user_version")
+        user_version = cursor.fetchone()[0]
+        if user_version < 2:
+            cursor.execute("VACUUM")
+            cursor.execute("PRAGMA user_version = 2")
+            self.conn.commit()
+
     def _utc_now_iso(self) -> str:
         """Return the current UTC time as an ISO 8601 string with a Z suffix."""
         return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
@@ -200,13 +180,16 @@ class PopStateTracker:
         expiration_date: str = None,
         rejection_reason: str = None,
     ):
-        encrypted_card = self._encrypt_field(masked_card)
+        # RT-2 R2 Fix 4: masked_card is a PCI-DSS 3.3 permitted last-4
+        # projection (already redacted); prior AES-GCM-over-hostname-HMAC
+        # added no meaningful protection over the N2 0600 file mode and was
+        # undermining auditability. Stored plaintext from v0.8.9 forward.
         timestamp = self._utc_now_iso()
         cursor = self.conn.cursor()
         cursor.execute("""
             INSERT INTO issued_seals (seal_id, amount, vendor, status, masked_card, expiration_date, timestamp, rejection_reason)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (seal_id, amount, vendor, status, encrypted_card, expiration_date, timestamp, rejection_reason))
+        """, (seal_id, amount, vendor, status, masked_card, expiration_date, timestamp, rejection_reason))
         self.conn.commit()
 
     def get_seal_masked_card(self, seal_id: str) -> str:
@@ -215,7 +198,7 @@ class PopStateTracker:
         cursor.execute("SELECT masked_card FROM issued_seals WHERE seal_id = ?", (seal_id,))
         row = cursor.fetchone()
         if row and row[0]:
-            return self._decrypt_field(row[0])
+            return row[0]
         return ""
 
     def update_seal_status(self, seal_id: str, status: str):

@@ -77,11 +77,12 @@ class PopPaymentTool(BaseTool):
         if seal.status.lower() == "rejected":
             return f"Payment rejected by guardrails. Reason: {seal.rejection_reason}"
 
+        # RT-2 R2 Fix 3: SecretStr.last4() returns the last 4 chars. For
+        # Stripe Issuing this produces "****-****-****-1234" from the pre-masked
+        # "****1234" value (last4("****1234") == "1234"), uniform with BYOC/mock
+        # that carry a full 16-digit PAN.
         if seal.card_number:
-            if seal.card_number.startswith("****"):
-                masked_card = seal.card_number  # Already masked (Stripe Issuing)
-            else:
-                masked_card = f"****-****-****-{seal.card_number[-4:]}"
+            masked_card = f"****-****-****-{seal.card_number.last4()}"
         else:
             masked_card = "****-****-****-????"
 

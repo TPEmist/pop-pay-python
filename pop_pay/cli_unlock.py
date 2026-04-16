@@ -39,13 +39,16 @@ def cmd_unlock():
         sys.exit(1)
 
     import getpass
-    passphrase = getpass.getpass("Vault passphrase: ")
+    from pop_pay.core.secret_str import SecretStr
+    # RT-2 R2 Fix 3.5 (Q5) — wrap passphrase in SecretStr so show_locals
+    # tracebacks do not leak it. .reveal() only at the PBKDF2 call boundary.
+    passphrase = SecretStr(getpass.getpass("Vault passphrase: "))
     if not passphrase:
         print("Passphrase cannot be empty.")
         sys.exit(1)
 
     # Verify the passphrase works before storing
-    key = derive_key_from_passphrase(passphrase)
+    key = derive_key_from_passphrase(passphrase.reveal())
     try:
         blob = VAULT_PATH.read_bytes()
         decrypt_credentials(blob, key_override=key)

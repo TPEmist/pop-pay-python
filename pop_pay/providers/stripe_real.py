@@ -2,6 +2,7 @@ import asyncio
 import stripe
 from pop_pay.providers.base import VirtualCardProvider
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy, VirtualSeal
+from pop_pay.core.secret_str import SecretStr
 import uuid
 
 class StripeIssuingProvider(VirtualCardProvider):
@@ -55,8 +56,8 @@ class StripeIssuingProvider(VirtualCardProvider):
             
             return VirtualSeal(
                 seal_id=str(uuid.uuid4()),
-                card_number=f"****{card.last4}",
-                cvv="***",
+                card_number=SecretStr(f"****{card.last4}"),
+                cvv=SecretStr("***"),
                 expiration_date=f"{card.exp_month}/{card.exp_year}",
                 authorized_amount=intent.requested_amount,
                 status="Issued"

@@ -3,6 +3,7 @@ import uuid
 from dotenv import load_dotenv
 from pop_pay.providers.base import VirtualCardProvider
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy, VirtualSeal
+from pop_pay.core.secret_str import SecretStr
 
 class LocalVaultProvider(VirtualCardProvider):
     def __init__(self, creds: dict | None = None):
@@ -12,10 +13,10 @@ class LocalVaultProvider(VirtualCardProvider):
         # Plaintext PAN/CVV no longer round-trips through os.environ when
         # sourced from vault.
         creds = creds or {}
-        self.card_number = creds.get("card_number") or os.getenv("POP_BYOC_NUMBER")
+        self.card_number = SecretStr(creds.get("card_number") or os.getenv("POP_BYOC_NUMBER") or "")
         self.exp_month = creds.get("exp_month") or os.getenv("POP_BYOC_EXP_MONTH")
         self.exp_year = creds.get("exp_year") or os.getenv("POP_BYOC_EXP_YEAR")
-        self.cvv = creds.get("cvv") or os.getenv("POP_BYOC_CVV")
+        self.cvv = SecretStr(creds.get("cvv") or os.getenv("POP_BYOC_CVV") or "")
 
         # Billing fields are optional — empty string means "not configured"
         self._billing_first_name = os.getenv("POP_BILLING_FIRST_NAME", "").strip()

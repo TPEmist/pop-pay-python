@@ -8,6 +8,7 @@ from pop_pay.vault import (
     VAULT_DIR, VAULT_PATH, OSS_WARNING,
     _read_vault_mode, wipe_vault_artifacts,
 )
+from pop_pay.core.secret_str import SecretStr
 from pop_pay.errors import (
     handle_cli_error,
     VaultDecryptFailed,
@@ -120,28 +121,38 @@ def _cmd_init_vault():
         print("\nPassphrase mode: your vault will be encrypted with a passphrase.")
         print("You must run `pop-unlock` before each MCP server session.\n")
         while True:
-            p1 = getpass.getpass("  Choose passphrase: ")
-            p2 = getpass.getpass("  Confirm passphrase: ")
+            # RT-2 R2 Fix 3.5 (Q5) — passphrase wrapped in SecretStr; equality
+            # compare uses dataclass __eq__ (by-value). len() is not available
+            # on SecretStr — use .reveal() for the length gate only.
+            p1 = SecretStr(getpass.getpass("  Choose passphrase: "))
+            p2 = SecretStr(getpass.getpass("  Confirm passphrase: "))
             if p1 != p2:
                 print("  Passphrases do not match. Try again.")
                 continue
-            if len(p1) < 8:
+            if len(p1.reveal()) < 8:
                 print("  Passphrase must be at least 8 characters.")
                 continue
-            key_override = derive_key_from_passphrase(p1)
+            key_override = derive_key_from_passphrase(p1.reveal())
             store_key_in_keyring(key_override)
             print("  Passphrase set. Vault unlocked for this session.")
             break
 
     print("Enter your card credentials (input is hidden):")
-    card_number = getpass.getpass("  Card number: ").strip().replace(" ", "").replace("-", "")
+    # RT-2 R2 Fix 3.5 — wrap PAN/CVV in SecretStr immediately after capture so
+    # any traceback with show_locals (rich.traceback, sys.excepthook) renders
+    # `***REDACTED***` for these frame locals. .reveal() is required at vault
+    # encryption time (json.dumps cannot serialize SecretStr by design) — that
+    # single call site is the audit footprint for unsealing.
+    card_number = SecretStr(
+        getpass.getpass("  Card number: ").strip().replace(" ", "").replace("-", "")
+    )
     exp_month = getpass.getpass("  Expiry month (MM): ").strip()
     exp_year = getpass.getpass("  Expiry year (YY): ").strip()
-    cvv = getpass.getpass("  CVV: ").strip()
+    cvv = SecretStr(getpass.getpass("  CVV: ").strip())
 
     creds = {
-        "card_number": card_number,
-        "cvv": cvv,
+        "card_number": card_number.reveal(),
+        "cvv": cvv.reveal(),
         "exp_month": exp_month,
         "exp_year": exp_year,
         "expiration_date": f"{exp_month}/{exp_year}",

@@ -3,6 +3,7 @@ import random
 from datetime import datetime, timedelta
 from pop_pay.providers.base import VirtualCardProvider
 from pop_pay.core.models import PaymentIntent, GuardrailPolicy, VirtualSeal
+from pop_pay.core.secret_str import SecretStr
 
 class MockStripeProvider(VirtualCardProvider):
     async def issue_card(self, intent: PaymentIntent, policy: GuardrailPolicy) -> VirtualSeal:
@@ -16,8 +17,8 @@ class MockStripeProvider(VirtualCardProvider):
             )
         
         # Issue mock card
-        card_number = "".join([str(random.randint(0, 9)) for _ in range(16)])
-        cvv = "".join([str(random.randint(0, 9)) for _ in range(3)])
+        card_number = SecretStr("".join([str(random.randint(0, 9)) for _ in range(16)]))
+        cvv = SecretStr("".join([str(random.randint(0, 9)) for _ in range(3)]))
         
         # Expiry date is 1 year from now
         exp_date = datetime.now() + timedelta(days=365)

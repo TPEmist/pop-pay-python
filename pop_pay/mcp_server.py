@@ -406,7 +406,7 @@ async def request_virtual_card(
     if seal.status.lower() == "rejected":
         return f"Payment rejected by guardrails. Reason: {seal.rejection_reason}"
 
-    last4 = seal.card_number[-4:] if seal.card_number else "????"
+    last4 = seal.card_number.last4() if seal.card_number else "????"
     masked_card = f"****-****-****-{last4}"
 
     # -------------------------------------------------------------------

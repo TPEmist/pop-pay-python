@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.9] - 2026-04-16
+
+### Security (RT-2 Round 2 — P1 SQLite freelist PAN leak + vault hygiene)
+
+Seven-fix bundle addressing a Round 2 red-team finding where plaintext PAN data could persist in SQLite freelist pages and WAL/SHM sidecars after legacy schema migration, and tightening runtime PAN/CVV handling through the provider and injector paths.
+
+**PAN leak acceptance:** 9 → 0 leaked bytes verified via PoC against `aegis_state.db` post-migration (SQLite freelist + SHM sidecar + SecretStr string-ops coverage).
+
+**Verification:** eng local / secretary local / founder fresh install all converged on 223 pass / 5 skip after Fix 7 keyring idempotency landed. Fresh-shell reproduction now mandatory per process update (see CONTRIBUTING).
+
+- **Fix 1 — SQLite freelist zeroing.** `PopStateTracker._init_db()` sets `PRAGMA secure_delete = ON` and performs a one-time `VACUUM` during legacy-schema migration (guarded by `PRAGMA user_version = 2`, idempotent). Rewrites every freelist page, including pages that still carried plaintext `card_number` residue after the legacy `DROP TABLE` + `RENAME`. `pop_pay/core/state.py:26-66` / `:135-145`.
+- **Fix 2 — Owner-only state DB permissions.** `chmod 0600` applied to `aegis_state.db` at open time. POSIX only; Windows ACLs out of scope. `pop_pay/core/state.py:18-22`.
+- **Fix 3 — `SecretStr` opaque type for PAN/CVV throughout the pipeline.**
+  - **3.1** New `pop_pay/core/secret_str.py` — `@dataclass(frozen=True, slots=True)` wrapper with `.reveal()` / `.last4()`; redacting `__str__` / `__repr__` / `__format__` / `__bool__`; not a `str` subclass, so string-ops (concat, encode, slice, `json.dumps`) raise rather than leak. Hashable, picklable, equality by value.
+  - **3.2** `pop_pay/injector.py` migrated to `SecretStr`. Legacy `_SecretStr(str)` shim retained unused at this step to preserve bisect-green across the multi-commit migration.
+  - **3.3 + 3.4** `VirtualSeal.card_number` / `VirtualSeal.cvv` re-typed `Optional[SecretStr]` with Pydantic `ConfigDict(arbitrary_types_allowed=True)`; all providers (`byoc_local`, `stripe_mock`, `stripe_real`) wrap at capture, all readers (`client.py`, `mcp_server.py`, `tools/langchain.py`) consume via `.last4()`. Landed as a single commit to preserve bisect-green — the type change breaks readers immediately.
+  - **3.5** Vault CLI (`cli_vault.py`, `cli_unlock.py`) wraps PAN / CVV / passphrase in `SecretStr` at `getpass` capture; `.reveal()` called only at the cryptographic boundary (PBKDF2, JSON encryption).
+  - **3.6** Final cleanup: `class _SecretStr(str)` shim deleted from `pop_pay/injector.py` once all call sites had migrated to `pop_pay.core.secret_str.SecretStr`.
+- **Fix 4 — Drop `masked_card` AES-GCM-over-hostname-HMAC encryption.** `masked_card` is already a PCI-DSS 3.3 permitted last-4 projection (redacted by definition). Prior encryption added no meaningful protection over the Fix 2 `0600` file mode and impeded auditability. Stored plaintext from v0.8.9 forward. `pop_pay/core/state.py:173-193`.
+- **Fix 6 — `.gitignore` hardening.** `*.db-wal`, `*.db-shm`, `aegis_state.db*` added so SQLite sidecars carrying plaintext residue during migration cannot land via `git add -A` mid-session. `.gitignore:18-21`.
+- **Fix 7 — `wipe_vault_artifacts` idempotency.** `clear_keyring()` now swallows `keyring.errors.PasswordDeleteError` as an idempotent no-op, matching the surrounding filesystem-wipe semantics. Previously: calling wipe on a fresh machine (no prior vault init) or a second time on any machine raised `PasswordDeleteError: Item not found`. Two new regression tests added (`test_wipe_vault_artifacts_idempotent_on_missing_keychain_entry`, `test_wipe_vault_artifacts_idempotent_on_repeat_call`), monkeypatched — no real Keychain contact. `pop_pay/vault.py:187-196`.
+
+### Internal
+- **Deleted legacy `class _SecretStr(str)` shim** from `pop_pay/injector.py` (Fix 3.6). Leading-underscore, never part of the public surface — fully replaced by `pop_pay.core.secret_str.SecretStr`. No external consumers (cross-repo grep clean).
+
+### Notes
+- `masked_card` rows written by v0.8.7 / v0.8.8 (AES-GCM-encrypted base64) will render as base64 in the dashboard after this upgrade. Not a silent failure mode — the stored string is simply no longer decoded post-Fix 4. Supported remediation: `pop-init-vault --wipe` + fresh seal generation.
+
+[0.8.9]: https://github.com/100xPercent/pop-pay-python/compare/v0.8.8...v0.8.9
+
 ## [0.8.8] - 2026-04-15
 
 ### Security (S0.7 Vault Hardening — F1-F8)

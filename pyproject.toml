@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pop-pay"
-version = "0.8.8"
+version = "0.8.9"
 description = "The runtime security layer for AI agent commerce. Drop-in CLI + MCP server — blocks hallucinated purchases and keeps card credentials out of agent context. it only takes 0.1% of Hallucination to drain 100% of your wallet."
 authors = [{name="Point One Percent Team"}]
 dynamic = ["readme"]

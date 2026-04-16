@@ -347,3 +347,134 @@ def test_migration_is_idempotent():
         # Should still be the single-Z format, not doubled
         assert row2[0].count("Z") == 1
         t2.close()
+
+
+# ---------------------------------------------------------------------------
+# RT-2 R2 N1 — VACUUM + secure_delete cleanup of legacy card_number residue
+# ---------------------------------------------------------------------------
+
+def test_secure_delete_enabled_on_fresh_db():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "fresh.db")
+        t = PopStateTracker(db_path)
+        assert t.conn.execute("PRAGMA secure_delete").fetchone()[0] == 1
+        t.close()
+
+
+def test_user_version_bumped_to_2_on_fresh_db():
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "fresh.db")
+        t = PopStateTracker(db_path)
+        assert t.conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        t.close()
+
+
+def test_legacy_migration_scrubs_card_number_from_freelist():
+    """RT-2 R2 N1: opening a legacy DB must VACUUM away plaintext card_number
+    residue left in freelist pages after the DROP + RENAME rebuild."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "legacy_pan.db")
+        # Build a legacy DB with recognizable plaintext PANs we can grep for
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            "CREATE TABLE issued_seals ("
+            "seal_id TEXT PRIMARY KEY, amount FLOAT, vendor TEXT, status TEXT, "
+            "card_number TEXT, cvv TEXT, expiration_date TEXT, "
+            "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)"
+        )
+        pans = ["4111111111111111", "5555555555554444", "378282246310005"]
+        for i, pan in enumerate(pans):
+            conn.execute(
+                "INSERT INTO issued_seals (seal_id, amount, vendor, status, card_number, cvv, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (f"v{i}", 10.0, "test", "Issued", pan, "123", "2026-03-15 10:00:00"),
+            )
+        conn.commit()
+        conn.close()
+
+        # Pre-check: raw bytes contain each PAN (proves the test setup
+        # actually reproduces the leak before we attempt the fix).
+        with open(db_path, "rb") as fh:
+            raw = fh.read()
+        for pan in pans:
+            assert pan.encode() in raw, f"setup sanity: {pan} not in pre-migration DB"
+
+        # Run the new migration.
+        t = PopStateTracker(db_path)
+        t.close()
+
+        # Post-check: no PAN substring survives the VACUUM.
+        with open(db_path, "rb") as fh:
+            raw = fh.read()
+        for pan in pans:
+            assert pan.encode() not in raw, f"PAN {pan} survived VACUUM — freelist leak"
+
+
+def test_legacy_migration_preserves_masked_rows_through_vacuum():
+    """Sibling of the freelist-scrub test: after VACUUM, the migrated rows
+    must still be retrievable with their derived masked_card intact."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = _make_legacy_db(tmp, with_card_number=True)
+        t = PopStateTracker(db_path)
+        row = t.conn.execute(
+            "SELECT masked_card FROM issued_seals WHERE seal_id = ?", ("vlegacy-1",)
+        ).fetchone()
+        assert row[0] == "****-****-****-1111"
+        t.close()
+
+
+def test_reopen_does_not_revacuum_when_user_version_already_2():
+    """Idempotency: once user_version=2, re-opening must skip the VACUUM
+    branch. We prove this by toggling user_version manually to 2 on an
+    untouched DB and asserting the migration does not downgrade or rerun."""
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = _make_legacy_db(tmp, with_card_number=False)
+        # First open — runs migration, bumps to user_version=2.
+        t1 = PopStateTracker(db_path)
+        assert t1.conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        t1.close()
+        # Second open — should NOT re-VACUUM (we cannot directly detect
+        # re-VACUUM but we can assert user_version stays 2 and data intact).
+        t2 = PopStateTracker(db_path)
+        assert t2.conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        row = t2.conn.execute(
+            "SELECT seal_id FROM issued_seals WHERE seal_id = ?", ("legacy-1",)
+        ).fetchone()
+        assert row is not None
+        t2.close()
+
+
+# ---------------------------------------------------------------------------
+# RT-2 R2 N2 — chmod 0600 state db
+# ---------------------------------------------------------------------------
+
+def test_state_db_file_mode_is_0600_on_posix():
+    """POSIX-only enforcement: state DB created 0600 (owner r/w only).
+    Windows no-op is accepted — test skips there."""
+    import platform
+    if platform.system() == "Windows":
+        pytest.skip("POSIX-only enforcement; Windows ACLs out of scope")
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "mode.db")
+        t = PopStateTracker(db_path)
+        mode = os.stat(db_path).st_mode & 0o777
+        assert mode == 0o600, f"expected 0o600, got {oct(mode)}"
+        t.close()
+
+
+def test_state_db_mode_reapplied_on_reopen():
+    """If the file mode is widened externally (e.g. via `chmod 644`), a
+    subsequent open of PopStateTracker must restore 0600."""
+    import platform
+    if platform.system() == "Windows":
+        pytest.skip("POSIX-only enforcement; Windows ACLs out of scope")
+    with tempfile.TemporaryDirectory() as tmp:
+        db_path = os.path.join(tmp, "mode_reapply.db")
+        t1 = PopStateTracker(db_path)
+        t1.close()
+        os.chmod(db_path, 0o644)
+        assert os.stat(db_path).st_mode & 0o777 == 0o644
+        t2 = PopStateTracker(db_path)
+        assert os.stat(db_path).st_mode & 0o777 == 0o600
+        t2.close()
+

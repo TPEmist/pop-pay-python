@@ -84,7 +84,7 @@ class PopClient:
             seal.authorized_amount,
             intent.target_vendor,
             status=record_status,
-            masked_card=f"****-****-****-{seal.card_number[-4:]}" if seal.card_number else "****-****-****-????",
+            masked_card=f"****-****-****-{seal.card_number.last4()}" if seal.card_number else "****-****-****-????",
             expiration_date=seal.expiration_date,
             rejection_reason=seal.rejection_reason,
         )
