@@ -6,7 +6,7 @@ from pathlib import Path
 from pop_pay.vault import (
     save_vault, vault_exists, secure_wipe_env,
     VAULT_DIR, VAULT_PATH, OSS_WARNING,
-    _read_vault_mode,
+    _read_vault_mode, wipe_vault_artifacts,
 )
 
 
@@ -15,7 +15,28 @@ def cmd_init_vault():
     parser = argparse.ArgumentParser(description="Initialize pop-pay credential vault")
     parser.add_argument("--passphrase", action="store_true",
                         help="Protect vault with a passphrase (stronger; requires pop-unlock each session)")
+    parser.add_argument("--wipe", action="store_true",
+                        help="F8: securely wipe all vault artifacts (vault.enc, .vault_mode, .machine_id, stale .tmp) and clear keyring, then exit.")
+    parser.add_argument("--yes", action="store_true",
+                        help="Skip confirmation prompts (used with --wipe).")
     args = parser.parse_args()
+
+    if args.wipe:
+        if not args.yes and sys.stdin.isatty():
+            ack = input(
+                "Wipe ALL pop-pay vault artifacts (vault.enc, .vault_mode, keyring, stale .tmp)? [y/N]: "
+            ).strip().lower()
+            if ack != "y":
+                print("Aborted.")
+                sys.exit(0)
+        wiped = wipe_vault_artifacts()
+        if not wiped:
+            print("No vault artifacts found.")
+        else:
+            for p in wiped:
+                print(f"wiped: {p}")
+        print("Keyring entry cleared.")
+        sys.exit(0)
 
     print("pop-pay vault setup")
     print("=" * 40)
@@ -27,7 +48,7 @@ def cmd_init_vault():
     if vault_exists():
         # Downgrade guard: refuse to overwrite a hardened vault from an OSS build
         vault_mode = _read_vault_mode()
-        if vault_mode == "hardened":
+        if vault_mode == "machine-hardened":
             try:
                 from pop_pay.engine import _vault_core
                 is_hardened = _vault_core.is_hardened()
@@ -52,6 +73,33 @@ def cmd_init_vault():
         if overwrite != "y":
             print("Aborted.")
             sys.exit(0)
+
+    # F3: OSS salt consent gate at init time. Non-passphrase init on a
+    # non-hardened build requires explicit consent — POP_ACCEPT_OSS_SALT=1
+    # or interactive y/N when stdin is a TTY.
+    if not args.passphrase:
+        try:
+            from pop_pay.engine import _vault_core
+            _is_hardened = _vault_core.is_hardened()
+        except (ImportError, AttributeError):
+            _is_hardened = False
+        if not _is_hardened:
+            import os as _os
+            if _os.environ.get("POP_ACCEPT_OSS_SALT") == "1":
+                pass
+            elif sys.stdin.isatty():
+                ack = input(
+                    "Proceed with OSS public salt? This offers weaker protection than --passphrase. [y/N]: "
+                ).strip().lower()
+                if ack != "y":
+                    print("Aborted. Re-run with --passphrase, or set POP_ACCEPT_OSS_SALT=1.")
+                    sys.exit(1)
+            else:
+                sys.stderr.write(
+                    "pop-init-vault: OSS public salt requires consent. "
+                    "Set POP_ACCEPT_OSS_SALT=1 or pass --passphrase.\n"
+                )
+                sys.exit(1)
 
     key_override = None
     if args.passphrase:

@@ -221,23 +221,45 @@ def vault_exists() -> bool:
     return VAULT_PATH.exists()
 
 
-def _write_vault_mode():
-    """Write .vault_mode marker (hardened/oss). Read by pop-init-vault and load_vault."""
-    try:
-        from pop_pay.engine import _vault_core
-        mode = "hardened" if _vault_core.is_hardened() else "oss"
-    except Exception:
-        mode = "oss"
+# Vault mode marker schema (F4/F7, S0.7).
+# Values written to ~/.config/pop-pay/.vault_mode:
+#   - passphrase        — key derived from user passphrase (PBKDF2), kept in OS keyring
+#   - machine-hardened  — machine-derived key using CI-injected compiled salt
+#   - machine-oss       — machine-derived key using public OSS salt
+#   - unknown           — marker file missing
+# Legacy values ("hardened", "oss") are migrated on read; next save_vault
+# rewrites the file in the new schema.
+VAULT_MODES = ("passphrase", "machine-hardened", "machine-oss", "unknown")
+
+
+def _write_vault_mode(is_passphrase: bool = False):
+    """Write .vault_mode marker. Schema: passphrase / machine-hardened / machine-oss."""
+    if is_passphrase:
+        mode = "passphrase"
+    else:
+        try:
+            from pop_pay.engine import _vault_core
+            mode = "machine-hardened" if _vault_core.is_hardened() else "machine-oss"
+        except Exception:
+            mode = "machine-oss"
     marker = VAULT_DIR / ".vault_mode"
     marker.write_text(mode)
     marker.chmod(0o600)
 
 
 def _read_vault_mode() -> str:
-    """Return 'hardened', 'oss', or 'unknown' if marker missing."""
+    """Return current vault mode string; migrates legacy 'hardened'/'oss' values."""
     marker = VAULT_DIR / ".vault_mode"
-    if marker.exists():
-        return marker.read_text().strip()
+    if not marker.exists():
+        return "unknown"
+    raw = marker.read_text().strip()
+    # Migrate pre-S0.7 legacy values
+    if raw == "hardened":
+        return "machine-hardened"
+    if raw == "oss":
+        return "machine-oss"
+    if raw in VAULT_MODES:
+        return raw
     return "unknown"
 
 
@@ -251,7 +273,7 @@ def load_vault() -> dict:
     """
     # Downgrade check: vault marker says hardened but .so is gone
     vault_mode = _read_vault_mode()
-    if vault_mode == "hardened":
+    if vault_mode == "machine-hardened":
         try:
             from pop_pay.engine import _vault_core
             if not _vault_core.is_hardened():
@@ -268,6 +290,21 @@ def load_vault() -> dict:
                 "Reinstall via PyPI: pip install pop-pay"
             )
 
+    # F3: OSS salt consent gate. machine-oss vaults use a public salt that an
+    # agent with shell execution could derive. Require explicit opt-in via
+    # POP_ACCEPT_OSS_SALT=1. Passphrase / machine-hardened / unknown bypass.
+    if vault_mode == "machine-oss" and os.environ.get("POP_ACCEPT_OSS_SALT") != "1":
+        _warning = (
+            "pop-pay: vault is encrypted with the OSS public salt. "
+            "An agent with shell execution could derive the key from public information."
+        )
+        sys.stdout.write("\u26a0\ufe0f  " + _warning + "\n")
+        sys.stderr.write("\u26a0\ufe0f  " + _warning + "\n")
+        raise ValueError(
+            "OSS-salt vault load refused: set POP_ACCEPT_OSS_SALT=1 to acknowledge, "
+            "or re-init via `pop-pay init-vault --passphrase` for stronger protection."
+        )
+
     blob = VAULT_PATH.read_bytes()
     # Try passphrase-derived key from keyring first (strongest protection)
     passphrase_key = load_key_from_keyring()
@@ -279,9 +316,69 @@ def load_vault() -> dict:
     return decrypt_credentials(blob)
 
 
+def cleanup_stale_temp_files() -> None:
+    """F8: enumerate stale vault.enc*.tmp siblings and securely overwrite + unlink.
+
+    A previous crashed save can leave a `.tmp` sibling that may still hold
+    ciphertext bytes; we treat them as sensitive. Best-effort.
+    """
+    if not VAULT_DIR.exists():
+        return
+    try:
+        entries = list(VAULT_DIR.iterdir())
+    except OSError:
+        return
+    for p in entries:
+        name = p.name
+        if not (name.startswith("vault.enc") and name.endswith(".tmp")):
+            continue
+        try:
+            size = p.stat().st_size
+            if size > 0:
+                with p.open("r+b") as f:
+                    f.write(b"\x00" * size)
+                    f.flush()
+                    os.fsync(f.fileno())
+            p.unlink()
+        except OSError:
+            pass
+
+
+def wipe_vault_artifacts() -> list:
+    """F8: enumerate every credential-bearing artifact under VAULT_DIR and
+    securely overwrite + unlink. Also clears the OS keyring. Returns the
+    list of paths that were wiped."""
+    wiped = []
+    if VAULT_DIR.exists():
+        try:
+            entries = list(VAULT_DIR.iterdir())
+        except OSError:
+            entries = []
+        sensitive_names = {".vault_mode", ".machine_id"}
+        for p in entries:
+            name = p.name
+            is_vault_blob = name == "vault.enc" or (name.startswith("vault.enc") and name.endswith(".tmp"))
+            if not (is_vault_blob or name in sensitive_names):
+                continue
+            try:
+                size = p.stat().st_size
+                if size > 0:
+                    with p.open("r+b") as f:
+                        f.write(b"\x00" * size)
+                        f.flush()
+                        os.fsync(f.fileno())
+                p.unlink()
+                wiped.append(str(p))
+            except OSError:
+                pass
+    clear_keyring()
+    return wiped
+
+
 def save_vault(creds: dict, key_override: bytes = None):
     """Encrypt and atomically write credentials to vault.enc."""
     VAULT_DIR.mkdir(parents=True, exist_ok=True)
+    cleanup_stale_temp_files()  # F8: sweep prior crashed writes
     blob = encrypt_credentials(creds, key_override=key_override)
     # Atomic write: tmp → fsync → rename
     tmp_path = VAULT_PATH.with_suffix(".enc.tmp")
@@ -300,8 +397,8 @@ def save_vault(creds: dict, key_override: bytes = None):
             decrypt_credentials(VAULT_PATH.read_bytes())
     except ValueError as e:
         raise RuntimeError(f"Vault write verification failed: {e}")
-    # Write mode marker so load_vault and pop-init-vault can detect downgrade attacks
-    _write_vault_mode()
+    # Write mode marker — F4/F7: passphrase / machine-hardened / machine-oss
+    _write_vault_mode(is_passphrase=key_override is not None)
 
 
 def secure_wipe_env(env_path: Path):
@@ -314,3 +411,20 @@ def secure_wipe_env(env_path: Path):
         f.flush()
         os.fsync(f.fileno())
     env_path.unlink()
+
+
+# S0.7 F1: env keys that carry plaintext PAN/CVV/expiry. Vault plaintext never
+# enters os.environ in the first place; redaction here is defense in depth for
+# child processes spawned by pop-pay.
+SENSITIVE_ENV_KEYS = (
+    "POP_BYOC_NUMBER",
+    "POP_BYOC_CVV",
+    "POP_BYOC_EXP_MONTH",
+    "POP_BYOC_EXP_YEAR",
+)
+
+
+def filtered_env(base: dict | None = None) -> dict:
+    """Return a copy of *base* (default os.environ) with SENSITIVE_ENV_KEYS stripped."""
+    src = os.environ if base is None else base
+    return {k: v for k, v in src.items() if k not in SENSITIVE_ENV_KEYS}

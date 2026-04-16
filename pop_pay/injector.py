@@ -43,6 +43,38 @@ def _seal(value: str) -> str:
         return value
     return _SecretStr(value)
 
+
+# S0.7 F6(b): detect Chrome instances launched with verbose logging flags that
+# can write plaintext CDP traffic to stderr/disk. Best-effort process scan; if
+# enumeration fails we return "" (don't block — the risk is additive not primary).
+_RISKY_CHROME_FLAGS = ("--enable-logging", "--v=", "--vmodule=", "--log-net-log")
+
+
+def _detect_risky_chrome_flags() -> str:
+    import subprocess
+    import sys as _sys
+    try:
+        if _sys.platform == "win32":
+            out = subprocess.run(
+                ["wmic", "process", "where", "name='chrome.exe'", "get", "CommandLine"],
+                capture_output=True, text=True, timeout=3,
+            ).stdout
+        else:
+            out = subprocess.run(
+                ["ps", "-Ao", "command"],
+                capture_output=True, text=True, timeout=3,
+            ).stdout
+    except (subprocess.SubprocessError, OSError):
+        return ""
+    for line in out.splitlines():
+        low = line.lower()
+        if "chrome" not in low and "chromium" not in low:
+            continue
+        for flag in _RISKY_CHROME_FLAGS:
+            if flag in line:
+                return flag
+    return ""
+
 # ISO 3166-1 alpha-2 → E.164 dial prefix.
 # Used to auto-derive the national number from a full E.164 phone string when
 # POP_BILLING_PHONE_COUNTRY_CODE is set — no POP_BILLING_PHONE_NATIONAL needed.
@@ -523,6 +555,19 @@ class PopBrowserInjector:
                         await page.goto(page_url, wait_until="domcontentloaded", timeout=15000)
                         await page.wait_for_timeout(3000)
                 else:
+                    # S0.7 F6: refuse to inject into a Chrome instance launched with
+                    # verbose logging flags — CDP traffic + stdout can leak plaintext
+                    # via --enable-logging=stderr and --v=<n>.
+                    _flag = _detect_risky_chrome_flags()
+                    if _flag:
+                        result["blocked_reason"] = f"chrome_logging_flag:{_flag}"
+                        logger.error(
+                            "PopBrowserInjector: refusing injection — target Chrome has "
+                            "%s enabled. Restart Chrome without verbose logging flags.",
+                            _flag,
+                        )
+                        return result
+
                     # Connect to the *existing* browser — does NOT launch a new instance
                     browser = await pw.chromium.connect_over_cdp(cdp_url)
 
@@ -554,7 +599,8 @@ class PopBrowserInjector:
                 #   before = mask fields before injection (more secure, agent never sees card)
                 #   after  = mask fields after injection (good for demos, shows card briefly)
                 #   off    = no masking
-                blackout_mode = os.getenv("POP_BLACKOUT_MODE", "after").lower()
+                # S0.7 F6(c): default is "before" — agent never sees plaintext in DOM.
+                blackout_mode = os.getenv("POP_BLACKOUT_MODE", "before").lower()
 
                 if blackout_mode == "before":
                     await self._enable_blackout(page)
@@ -1070,6 +1116,16 @@ class PopBrowserInjector:
                         await page.goto(page_url, wait_until="domcontentloaded", timeout=15000)
                         await page.wait_for_timeout(3000)
                 else:
+                    # S0.7 F6(b): same verbose-logging guard as card injection path.
+                    _flag = _detect_risky_chrome_flags()
+                    if _flag:
+                        result["blocked_reason"] = f"chrome_logging_flag:{_flag}"
+                        logger.error(
+                            "PopBrowserInjector: refusing billing injection — target "
+                            "Chrome has %s enabled.",
+                            _flag,
+                        )
+                        return result
                     browser = await pw.chromium.connect_over_cdp(cdp_url)
                     page = self._find_best_page(browser)
 
