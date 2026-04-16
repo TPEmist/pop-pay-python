@@ -67,7 +67,7 @@ Then add to your OpenClaw config:
 Set your spend policy in `~/.config/pop-pay/.env`:
 
 ```
-POP_ALLOWED_CATEGORIES=["amazon","shopify","aws"]
+POP_ALLOWED_CATEGORIES='["amazon","shopify","aws"]'
 POP_MAX_AMOUNT_PER_TX=100
 POP_MAX_DAILY_BUDGET=300
 POP_AUTO_INJECT=true          # set to false to review injections manually

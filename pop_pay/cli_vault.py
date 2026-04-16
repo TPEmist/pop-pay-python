@@ -126,7 +126,7 @@ def _cmd_init_vault():
                 "# pop-pay policy configuration\n"
                 "# Card credentials are stored in vault.enc — do not add them here.\n\n"
                 "# Vendors the agent is allowed to pay (JSON array)\n"
-                'POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai", "github", "Wikipedia", "donation", "Wikimedia"]\n\n'
+                'POP_ALLOWED_CATEGORIES=\'["aws", "cloudflare", "openai", "github", "Wikipedia", "donation", "Wikimedia"]\'\n\n'
                 "# Spending limits\n"
                 "POP_MAX_PER_TX=100.0\n"
                 "POP_MAX_DAILY=500.0\n"
@@ -142,8 +142,8 @@ def _cmd_init_vault():
                 "# POP_BILLING_EMAIL=bob@example.com\n"
                 "# POP_BILLING_PHONE_COUNTRY_CODE=+1\n"
                 "# POP_BILLING_PHONE=+14155551234\n"
-                "# POP_BILLING_STREET=123 Main St\n"
-                "# POP_BILLING_CITY=Redwood City\n"
+                '# POP_BILLING_STREET="123 Main St"\n'
+                '# POP_BILLING_CITY="Redwood City"\n'
                 "# POP_BILLING_ZIP=94043\n"
                 "# POP_BILLING_STATE=CA\n"
                 "# POP_BILLING_COUNTRY=US\n"

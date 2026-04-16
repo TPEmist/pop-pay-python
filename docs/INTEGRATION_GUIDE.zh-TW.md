@@ -94,7 +94,7 @@ pop-unlock                     # 每次 MCP 伺服器會話前執行一次
 
 ```bash
 # ── 消費策略 ──
-POP_ALLOWED_CATEGORIES=["aws", "cloudflare", "openai", "github", "wikipedia", "donation"]
+POP_ALLOWED_CATEGORIES='["aws", "cloudflare", "openai", "github", "wikipedia", "donation"]'
 POP_MAX_PER_TX=100.0
 POP_MAX_DAILY=500.0
 POP_BLOCK_LOOPS=true
@@ -112,14 +112,14 @@ POP_CDP_URL=http://localhost:9222
 # POP_BILLING_EMAIL=bob@example.com
 # POP_BILLING_PHONE_COUNTRY_CODE=US     # 選填：填入國碼下拉選單；本地號碼自動推算
 # POP_BILLING_PHONE=+14155551234        # E.164 格式
-# POP_BILLING_STREET=123 Main St
-# POP_BILLING_CITY=Redwood City
+# POP_BILLING_STREET="123 Main St"
+# POP_BILLING_CITY="Redwood City"
 # POP_BILLING_STATE=CA                  # 全名或縮寫，模糊比對
 # POP_BILLING_COUNTRY=US                # ISO 碼或全名，模糊比對
 # POP_BILLING_ZIP=94043
 
 # ── 額外信任的支付處理商（內建清單已含 Stripe、Zoho、Square 等）──
-# POP_ALLOWED_PAYMENT_PROCESSORS=["checkout.myprocessor.com"]
+# POP_ALLOWED_PAYMENT_PROCESSORS='["checkout.myprocessor.com"]'
 
 # ── 自訂封鎖關鍵字（延伸內建清單）──
 # POP_EXTRA_BLOCK_KEYWORDS=
