@@ -363,6 +363,57 @@ def test_wipe_vault_artifacts_idempotent_on_empty_dir(tmp_path, monkeypatch):
     assert wiped == []
 
 
+def test_wipe_vault_artifacts_idempotent_on_missing_keychain_entry(tmp_path, monkeypatch):
+    """RT-2 Fix 7: wipe must no-op cleanly when no OS keyring entry exists.
+
+    Regression guard: before Fix 7, calling wipe on a fresh machine (no prior
+    vault init) raised keyring.errors.PasswordDeleteError bubbling out of
+    clear_keyring(). Post-fix the raise is swallowed as an idempotent no-op,
+    matching the filesystem-wipe semantics of the surrounding function.
+    """
+    import keyring
+    import keyring.errors
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+
+    def raise_not_found(*_args, **_kwargs):
+        raise keyring.errors.PasswordDeleteError("Item not found")
+    monkeypatch.setattr(keyring, "delete_password", raise_not_found)
+
+    wiped = vault_mod.wipe_vault_artifacts()
+    assert wiped == []
+
+
+def test_wipe_vault_artifacts_idempotent_on_repeat_call(tmp_path, monkeypatch):
+    """RT-2 Fix 7: calling wipe_vault_artifacts() twice in succession succeeds.
+
+    First call removes filesystem artifacts + keyring entry; second call finds
+    both already gone. Pre-Fix 7 the second call raised PasswordDeleteError
+    because keyring.delete_password was unconditional. Post-fix both calls
+    return cleanly.
+    """
+    import keyring
+    import keyring.errors
+    import pop_pay.vault as vault_mod
+    monkeypatch.setattr(vault_mod, "VAULT_DIR", tmp_path)
+
+    (tmp_path / ".machine_id").write_bytes(b"abc")
+
+    calls = {"n": 0}
+
+    def delete_stub(*_args, **_kwargs):
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise keyring.errors.PasswordDeleteError("Item not found")
+    monkeypatch.setattr(keyring, "delete_password", delete_stub)
+
+    first = vault_mod.wipe_vault_artifacts()
+    second = vault_mod.wipe_vault_artifacts()
+    assert len(first) == 1
+    assert second == []
+    assert calls["n"] == 2
+
+
 def test_save_vault_sweeps_stale_tmp_before_writing(tmp_path, monkeypatch):
     """save_vault calls cleanup_stale_temp_files — pre-existing stale .tmp gone after save."""
     pytest.importorskip("cryptography")
