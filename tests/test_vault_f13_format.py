@@ -92,6 +92,31 @@ class TestLegacyV0:
         assert matches == 1
 
 
+class TestV1ToV0Fallback:
+    """v1 header parse + AEAD verify fails → fall back to v0 path.
+
+    Covers the 1/65536 case where a legacy v0 blob's random nonce happens to
+    start with 0x5050 0x01 0x00 (same prefix as v1 magic + VERSION + RESERVED).
+    """
+
+    def _build_collided_v0(self) -> bytes:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        # Force nonce prefix to match v1 header so the reader enters the
+        # v1 path, attempts AAD decrypt, fails, and falls back.
+        nonce = b"\x50\x50\x01\x00" + os.urandom(8)
+        aesgcm = AESGCM(TEST_KEY)
+        ct_and_tag = aesgcm.encrypt(nonce, json.dumps(CREDS).encode(), None)
+        return nonce + ct_and_tag
+
+    def test_decrypts_collided_v0(self):
+        blob = self._build_collided_v0()
+        assert blob[0] == 0x50
+        assert blob[1] == 0x50
+        assert blob[2] == 0x01
+        assert decrypt_credentials(blob, key_override=TEST_KEY) == CREDS
+
+
 class TestMigrationRewriteOnSave:
     def test_rewrite_yields_v1(self):
         _reset_legacy_migration_notified()

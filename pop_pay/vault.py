@@ -275,9 +275,7 @@ def decrypt_credentials(blob: bytes, salt: bytes = None, key_override: bytes = N
         raise ImportError("cryptography package required: pip install 'pop-pay[vault]'")
 
     has_magic = len(blob) >= 2 and blob[0] == 0x50 and blob[1] == 0x50
-    if has_magic:
-        if len(blob) < _VAULT_HEADER_LEN + 28:  # 4 header + 12 nonce + 16 tag
-            raise VaultDecryptFailed("vault.enc is corrupted or too small")
+    if has_magic and len(blob) >= _VAULT_HEADER_LEN + 28:  # 4 header + 12 nonce + 16 tag
         version = blob[2]
         if version != _VAULT_VERSION_V1:
             raise VaultDecryptFailed(
@@ -285,12 +283,19 @@ def decrypt_credentials(blob: bytes, salt: bytes = None, key_override: bytes = N
             )
         header = blob[:_VAULT_HEADER_LEN]
         body = blob[_VAULT_HEADER_LEN:]
-        return _decrypt_body(body, salt, key_override, header)
+        try:
+            return _decrypt_body(body, salt, key_override, header)
+        except VaultDecryptFailed:
+            # v1 AEAD verify failed — may be a legacy v0 blob whose random
+            # nonce collided with 0x5050 magic (1/65536). Fall through to v0
+            # path; AAD security preserved since v0 never had AAD to begin with.
+            pass
 
-    # Legacy v0 path — no magic, no AAD. Next save_vault rewrites as v1.
+    # Legacy v0 path (also collided-magic fallback). No AAD.
     if len(blob) < 28:
         raise VaultDecryptFailed("vault.enc is corrupted or too small")
-    _notify_legacy_v0_once()
+    if not has_magic:
+        _notify_legacy_v0_once()
     return _decrypt_body(blob, salt, key_override, None)
 
 
