@@ -18,6 +18,13 @@ from dataclasses import asdict, dataclass
 from typing import Literal
 from urllib.parse import urlparse
 
+from pop_pay.doctor_f9 import (
+    F9CheckResult,
+    F9Options,
+    ForkMode,
+    run_f9_checks,
+)
+
 CheckStatus = Literal["pass", "warn", "fail"]
 
 
@@ -385,7 +392,25 @@ def _render(checks: list[DoctorCheck]) -> None:
     print()
 
 
-def run_doctor(as_json: bool = False) -> list[DoctorCheck]:
+def _f9_to_doctor(r: F9CheckResult, cat: dict[str, dict]) -> DoctorCheck:
+    """Adapt an F9CheckResult onto the DoctorCheck surface for rendering.
+
+    Any F9 failure is treated as a blocker at the doctor level (mirrors TS).
+    Under default mode, f9_l2_sha_pin returns warn (not fail), so only the
+    load-bearing layers (L1 codesign, L3 fork whitelist, and L2 under --strict)
+    actually surface as blocking fails.
+    """
+    return _mk(
+        r.id,
+        r.name,
+        r.status,
+        r.detail,
+        cat,
+        blocker_override=(r.status == "fail"),
+    )
+
+
+def run_doctor(as_json: bool = False, fork_mode: ForkMode = "default") -> list[DoctorCheck]:
     cat = _load_remediation_catalog()
     checks = [
         _check_python_version(cat),
@@ -399,6 +424,11 @@ def run_doctor(as_json: bool = False) -> list[DoctorCheck]:
         _check_layer2_probe(cat),
         _check_injector_smoke(cat),
     ]
+    # F9 — Chrome binary integrity (4 layers; L4 emits two rows). Never
+    # live-fetches; see docs/VAULT_THREAT_MODEL.md §2.8.
+    f9 = run_f9_checks(F9Options(fork_mode=fork_mode, cdp_port=_cdp_port()))
+    for r in f9.checks:
+        checks.append(_f9_to_doctor(r, cat))
     if as_json:
         print(json.dumps([asdict(c) for c in checks], indent=2))
     else:
@@ -406,9 +436,19 @@ def run_doctor(as_json: bool = False) -> list[DoctorCheck]:
     return checks
 
 
+def _parse_fork_mode(argv: list[str]) -> ForkMode:
+    if "--strict" in argv:
+        return "strict"
+    if "--permissive" in argv:
+        return "permissive"
+    return "default"
+
+
 def main() -> int:
-    as_json = "--json" in sys.argv[1:]
-    checks = run_doctor(as_json=as_json)
+    argv = sys.argv[1:]
+    as_json = "--json" in argv
+    fork_mode = _parse_fork_mode(argv)
+    checks = run_doctor(as_json=as_json, fork_mode=fork_mode)
     return 1 if any(c.status == "fail" and c.blocker for c in checks) else 0
 
 
